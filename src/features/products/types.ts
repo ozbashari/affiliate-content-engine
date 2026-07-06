@@ -21,6 +21,7 @@ export interface CatalogProduct {
   discountPercent?: number;
   rating?: number;
   salesCount?: number;
+  commissionRate?: number;
   status: ProductStatus;
   createdAt: Date;
   updatedAt: Date;
