@@ -20,9 +20,41 @@ export class AliExpressClient {
   private config: AliExpressConfig;
 
   constructor(customConfig?: Partial<AliExpressConfig>) {
-    // Retrieve default config and merge with any custom values passed
+    // Retrieve default config and merge with any custom values passed.
+    // If required environment variables are missing, this will throw.
     const defaultConfig = getAliExpressConfig();
     this.config = { ...defaultConfig, ...customConfig };
+  }
+
+  /**
+   * Validates the client configuration. Confirms that:
+   * - Configuration is loaded.
+   * - Required credentials exist.
+   * - The client was initialized successfully.
+   * Does NOT call the AliExpress API.
+   */
+  healthCheck(): { status: 'ok' | 'error'; message: string; config?: Omit<AliExpressConfig, 'appSecret'> } {
+    try {
+      // Confirm required credentials exist in the loaded configuration
+      if (!this.config.appKey || !this.config.appSecret || !this.config.trackingId) {
+        throw new Error('AliExpress client configuration is missing required credentials.');
+      }
+
+      return {
+        status: 'ok',
+        message: 'AliExpress client is configured correctly and initialized successfully.',
+        config: {
+          appKey: this.config.appKey,
+          trackingId: this.config.trackingId,
+          apiUrl: this.config.apiUrl,
+        },
+      };
+    } catch (error: any) {
+      return {
+        status: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   /**

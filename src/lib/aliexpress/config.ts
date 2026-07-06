@@ -11,17 +11,22 @@ export function getAliExpressConfig(): AliExpressConfig {
   const trackingId = process.env.ALIEXPRESS_TRACKING_ID;
   const apiUrl = process.env.ALIEXPRESS_API_URL || 'https://api-sg.aliexpress.com/sync';
 
-  if (!appKey || !appSecret || !trackingId) {
+  const missing: string[] = [];
+  if (!appKey) missing.push('ALIEXPRESS_APP_KEY');
+  if (!appSecret) missing.push('ALIEXPRESS_APP_SECRET');
+  if (!trackingId) missing.push('ALIEXPRESS_TRACKING_ID');
+
+  if (missing.length > 0) {
     throw new Error(
-      `AliExpress configuration error: Missing required environment variables. ` +
-      `Ensure ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET, and ALIEXPRESS_TRACKING_ID are defined.`
+      `AliExpress configuration error: Missing required environment variables: ${missing.join(', ')}. ` +
+      `Ensure these are defined in your environment (e.g. .env.local).`
     );
   }
 
   return {
-    appKey,
-    appSecret,
-    trackingId,
+    appKey: appKey!,
+    appSecret: appSecret!,
+    trackingId: trackingId!,
     apiUrl,
   };
 }
