@@ -48,6 +48,8 @@
 * Product Provider: AliExpress Affiliate API
 * Publishing: Telegram Bot API
 * AI: Gemini (אופציונלי ב-MVP)
+- UI Components: Shadcn/UI בצורה נקודתית בלבד.
+- Dependency Policy: כל ספרייה חדשה דורשת הצדקה ואישור.
 
 ---
 
