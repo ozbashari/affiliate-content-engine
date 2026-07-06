@@ -1,45 +1,101 @@
-# Telegram Gadget Affiliate Bot
+# Affiliate Content Engine
 
-A simple Next.js MVP web app to create and publish Hebrew affiliate posts for gadget products to a Telegram channel using OpenAI.
+ברוכים הבאים לפרויקט **Affiliate Content Engine**.
 
-## Features
+מטרת הפרויקט היא לבנות מערכת מודולרית לאיתור מוצרי Affiliate, יצירת תוכן שיווקי באמצעות AI והפצת המוצרים לערוצי תוכן שונים.
 
-- Fill in product details (Name, Price, URL, Image URL, Category, Notes)
-- Generate an engaging Hebrew Telegram post using OpenAI
-- Edit the generated post before publishing
-- Publish directly to your Telegram channel (with optional image)
+בשלב הראשון (MVP) המערכת תתמוך ב:
 
-## Tech Stack
+* AliExpress כמקור המוצרים.
+* Telegram כערוץ הפרסום הראשון.
+* Gemini כמנוע AI אופציונלי.
 
-- Next.js (App Router)
-- TypeScript
-- Node.js
-- OpenAI API
-- Telegram Bot API
+---
 
-## Setup Instructions
+# לפני שמתחילים לעבוד
 
-1. Clone or download this project.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Copy `.env.example` to `.env` and fill in your API keys:
-   ```bash
-   cp .env.example .env
-   ```
-   **Required variables:**
-   - `OPENAI_API_KEY`: Your OpenAI API key
-   - `TELEGRAM_BOT_TOKEN`: The token provided by BotFather
-   - `TELEGRAM_CHANNEL_ID`: The channel ID (e.g., `@mychannel` or `-1001234567890`). Make sure the bot is an admin in the channel.
+לפני כל שינוי בקוד **חובה** לקרוא את המסמכים הבאים לפי הסדר:
 
-4. Run the development server:
-   ```bash
-   npm run dev
-   ```
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+1. `docs/00-project-overview.md`
+2. `docs/01-development-rules.md`
+3. `docs/02-mvp-roadmap.md`
 
-## Important Note
+אין להתחיל פיתוח לפני קריאת המסמכים.
 
-This app does not include authentication, tracking, or a database. It's meant to be a simple, working MVP. Do not expose this app to the public web without adding some form of authentication.
-"# telegram-bot" 
+---
+
+# דרך העבודה בפרויקט
+
+בכל משימה עובדים לפי השלבים הבאים:
+
+1. להבין את המשימה.
+2. לממש **רק** את המשימה הנוכחית.
+3. להסביר אילו שינויים בוצעו.
+4. להסביר כיצד לבדוק שהשינוי עובד.
+5. להמתין לאישור לפני מעבר למשימה הבאה.
+
+אין להתקדם באופן אוטומטי לשלבים עתידיים.
+
+---
+
+# עקרונות הפרויקט
+
+* קודם מערכת פשוטה, אחר כך מערכת חכמה.
+* כל שלב חייב להיות עובד לפני שממשיכים.
+* אין להוסיף פיצ'רים שלא הוגדרו.
+* אין לשנות את הארכיטקטורה ללא אישור.
+* קוד פשוט עדיף על קוד מורכב.
+* כל שינוי צריך להיות קטן, ברור וקל לבדיקה.
+
+---
+
+# מטרת ה-MVP
+
+בסיום ה-MVP יהיה ניתן:
+
+* לסרוק מוצרים מ-AliExpress.
+* לשמור אותם במסד הנתונים.
+* לצפות בהם במערכת.
+* לפרסם מוצר לטלגרם.
+* לייצר תוכן באמצעות AI (כאופציה).
+* לפרסם גם את גרסת ה-AI.
+
+---
+
+# סטטוס הפרויקט
+
+הפרויקט נמצא בשלב התכנון והקמת התשתית.
+
+טרם נכתב קוד.
+
+המטרה היא להקים בסיס יציב שיאפשר פיתוח הדרגתי, פשוט ואמין.
+
+---
+
+# ניהול סטטוס הפרויקט
+
+הסטטוס העדכני של הפרויקט מנוהל בקובץ:
+
+`project/project-state.md`
+
+קובץ זה משמש כ"זיכרון" של הפרויקט, ובכל רגע נתון אמור להכיל:
+
+* השלב הנוכחי בפיתוח.
+* המשימה הפעילה.
+* משימות שהושלמו.
+* המשימה הבאה.
+* בעיות פתוחות (Known Issues).
+* החלטות זמניות.
+* הערות חשובות להמשך הפיתוח.
+
+לפני תחילת עבודה מומלץ לקרוא גם אותו כדי להבין את מצב הפרויקט העדכני.
+
+---
+
+# עיקרון חשוב
+
+אנחנו לא בונים "בוט לטלגרם".
+
+אנחנו בונים פלטפורמה מודולרית לניהול והפצת תוכן Affiliate.
+
+בשלב ה-MVP ימומשו רק הרכיבים ההכרחיים, אך הארכיטקטורה תאפשר בעתיד חיבור למקורות מוצרים וערוצי פרסום נוספים.
