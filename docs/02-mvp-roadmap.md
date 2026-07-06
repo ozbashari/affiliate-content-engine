@@ -189,5 +189,3 @@
 * Multi Channel
 * Additional Affiliate Networks
 
-- UI Components: Shadcn/UI בצורה נקודתית בלבד.
-- Dependency Policy: כל ספרייה חדשה דורשת הצדקה ואישור.

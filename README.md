@@ -1,101 +1,36 @@
-# Affiliate Content Engine
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-ברוכים הבאים לפרויקט **Affiliate Content Engine**.
+## Getting Started
 
-מטרת הפרויקט היא לבנות מערכת מודולרית לאיתור מוצרי Affiliate, יצירת תוכן שיווקי באמצעות AI והפצת המוצרים לערוצי תוכן שונים.
+First, run the development server:
 
-בשלב הראשון (MVP) המערכת תתמוך ב:
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-* AliExpress כמקור המוצרים.
-* Telegram כערוץ הפרסום הראשון.
-* Gemini כמנוע AI אופציונלי.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
----
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-# לפני שמתחילים לעבוד
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-לפני כל שינוי בקוד **חובה** לקרוא את המסמכים הבאים לפי הסדר:
+## Learn More
 
-1. `docs/00-project-overview.md`
-2. `docs/01-development-rules.md`
-3. `docs/02-mvp-roadmap.md`
+To learn more about Next.js, take a look at the following resources:
 
-אין להתחיל פיתוח לפני קריאת המסמכים.
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
----
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-# דרך העבודה בפרויקט
+## Deploy on Vercel
 
-בכל משימה עובדים לפי השלבים הבאים:
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-1. להבין את המשימה.
-2. לממש **רק** את המשימה הנוכחית.
-3. להסביר אילו שינויים בוצעו.
-4. להסביר כיצד לבדוק שהשינוי עובד.
-5. להמתין לאישור לפני מעבר למשימה הבאה.
-
-אין להתקדם באופן אוטומטי לשלבים עתידיים.
-
----
-
-# עקרונות הפרויקט
-
-* קודם מערכת פשוטה, אחר כך מערכת חכמה.
-* כל שלב חייב להיות עובד לפני שממשיכים.
-* אין להוסיף פיצ'רים שלא הוגדרו.
-* אין לשנות את הארכיטקטורה ללא אישור.
-* קוד פשוט עדיף על קוד מורכב.
-* כל שינוי צריך להיות קטן, ברור וקל לבדיקה.
-
----
-
-# מטרת ה-MVP
-
-בסיום ה-MVP יהיה ניתן:
-
-* לסרוק מוצרים מ-AliExpress.
-* לשמור אותם במסד הנתונים.
-* לצפות בהם במערכת.
-* לפרסם מוצר לטלגרם.
-* לייצר תוכן באמצעות AI (כאופציה).
-* לפרסם גם את גרסת ה-AI.
-
----
-
-# סטטוס הפרויקט
-
-הפרויקט נמצא בשלב התכנון והקמת התשתית.
-
-טרם נכתב קוד.
-
-המטרה היא להקים בסיס יציב שיאפשר פיתוח הדרגתי, פשוט ואמין.
-
----
-
-# ניהול סטטוס הפרויקט
-
-הסטטוס העדכני של הפרויקט מנוהל בקובץ:
-
-`project/project-state.md`
-
-קובץ זה משמש כ"זיכרון" של הפרויקט, ובכל רגע נתון אמור להכיל:
-
-* השלב הנוכחי בפיתוח.
-* המשימה הפעילה.
-* משימות שהושלמו.
-* המשימה הבאה.
-* בעיות פתוחות (Known Issues).
-* החלטות זמניות.
-* הערות חשובות להמשך הפיתוח.
-
-לפני תחילת עבודה מומלץ לקרוא גם אותו כדי להבין את מצב הפרויקט העדכני.
-
----
-
-# עיקרון חשוב
-
-אנחנו לא בונים "בוט לטלגרם".
-
-אנחנו בונים פלטפורמה מודולרית לניהול והפצת תוכן Affiliate.
-
-בשלב ה-MVP ימומשו רק הרכיבים ההכרחיים, אך הארכיטקטורה תאפשר בעתיד חיבור למקורות מוצרים וערוצי פרסום נוספים.
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
