@@ -14,7 +14,7 @@
 
 ## מה הושלם
 
-* ✅ מבנה תיקיות ראשוני.
+* ✅ מבנה תיקיות ראשוני ומורחב (Sprint 01 - Feature-first architecture).
 * ✅ README.
 * ✅ 00 - Project Overview.
 * ✅ 01 - Development Rules.
