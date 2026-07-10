@@ -23,10 +23,23 @@ export class TelegramPublisher {
 
     try {
       const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
-      const payload = {
+      const payload: any = {
         chat_id: this.channelId,
         text: input.post.fullText,
       };
+
+      if (input.post.affiliateUrl) {
+        payload.reply_markup = {
+          inline_keyboard: [
+            [
+              {
+                text: 'לקנייה באליאקספרס 🛍️',
+                url: input.post.affiliateUrl,
+              },
+            ],
+          ],
+        };
+      }
 
       const response = await fetch(url, {
         method: 'POST',
