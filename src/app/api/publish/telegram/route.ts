@@ -5,8 +5,16 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const post = body?.post;
+    const body: unknown = await request.json();
+    
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid request body' },
+        { status: 400 }
+      );
+    }
+
+    const { post, imageUrl } = body as { post?: { fullText?: string; affiliateUrl?: string; title?: string; body?: string; hashtags?: string[]; cta?: string }; imageUrl?: string };
 
     if (!post || !post.fullText) {
       return NextResponse.json(
@@ -15,8 +23,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!imageUrl) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required field: imageUrl' },
+        { status: 400 }
+      );
+    }
+
     const publisher = new TelegramPublisher();
-    const result = await publisher.publish({ post });
+    const result = await publisher.publish({
+      post: {
+        title: post.title || '',
+        body: post.body || '',
+        hashtags: post.hashtags || [],
+        cta: post.cta || '',
+        affiliateUrl: post.affiliateUrl || '',
+        fullText: post.fullText,
+      },
+      imageUrl,
+    });
 
     if (!result.success) {
       return NextResponse.json(
@@ -28,8 +53,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       messageId: result.externalId,
+      publishType: result.publishType,
+      photoMessageId: result.photoMessageId,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
       {
         success: false,

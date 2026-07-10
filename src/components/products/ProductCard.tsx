@@ -18,6 +18,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const [publishSuccess, setPublishSuccess] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishMessageId, setPublishMessageId] = useState<string | null>(null);
+  const [publishType, setPublishType] = useState<'photo' | 'photo-with-text' | 'text-fallback' | null>(null);
 
   const rating = product.rating !== undefined ? product.rating.toFixed(1) : 'N/A';
   const commission = product.commissionRate !== undefined ? `${product.commissionRate}%` : 'N/A';
@@ -29,6 +30,7 @@ export function ProductCard({ product }: ProductCardProps) {
     setPublishSuccess(false);
     setPublishError(null);
     setPublishMessageId(null);
+    setPublishType(null);
     try {
       const response = await fetch('/api/ai/generate', {
         method: 'POST',
@@ -38,13 +40,21 @@ export function ProductCard({ product }: ProductCardProps) {
         body: JSON.stringify({ product }),
       });
 
-      const data = await response.json();
-      if (!response.ok || data.success === false) {
-        throw new Error(data.error || `HTTP error ${response.status}: ${response.statusText}`);
+      interface GenerateResponse {
+        success: boolean;
+        post?: GeneratedPost;
+        error?: string;
       }
 
-      setPostPreview(data.post);
-    } catch (err: any) {
+      const data = (await response.json()) as GenerateResponse;
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || `HTTP error ${response.status}`);
+      }
+
+      if (data.post) {
+        setPostPreview(data.post);
+      }
+    } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
@@ -57,23 +67,39 @@ export function ProductCard({ product }: ProductCardProps) {
     setPublishError(null);
     setPublishSuccess(false);
     setPublishMessageId(null);
+    setPublishType(null);
     try {
       const response = await fetch('/api/publish/telegram', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ post: postPreview }),
+        body: JSON.stringify({ 
+          post: postPreview,
+          imageUrl: product.imageUrl,
+        }),
       });
 
-      const data = await response.json();
+      interface PublishApiResponse {
+        success: boolean;
+        messageId?: string;
+        publishType?: 'photo' | 'photo-with-text' | 'text-fallback';
+        error?: string;
+      }
+
+      const data = (await response.json()) as PublishApiResponse;
       if (!response.ok || data.success === false) {
-        throw new Error(data.error || `HTTP error ${response.status}: ${response.statusText}`);
+        throw new Error(data.error || `HTTP error ${response.status}`);
       }
 
       setPublishSuccess(true);
-      setPublishMessageId(data.messageId);
-    } catch (err: any) {
+      if (data.messageId) {
+        setPublishMessageId(data.messageId);
+      }
+      if (data.publishType) {
+        setPublishType(data.publishType);
+      }
+    } catch (err: unknown) {
       setPublishError(err instanceof Error ? err.message : String(err));
     } finally {
       setPublishing(false);
@@ -218,7 +244,12 @@ export function ProductCard({ product }: ProductCardProps) {
 
             {publishSuccess && (
               <div className="p-2.5 bg-green-50 text-green-700 text-[10px] rounded-lg border border-green-200">
-                <strong>Published!</strong> Message ID: {publishMessageId}
+                <div><strong>Published!</strong> Message ID: {publishMessageId}</div>
+                {publishType && (
+                  <div className="mt-1 text-[9px] text-green-600 font-medium">
+                    Method: {publishType === 'photo' ? 'Photo Caption' : publishType === 'photo-with-text' ? 'Photo + separate text' : 'Text Fallback'}
+                  </div>
+                )}
               </div>
             )}
           </div>
