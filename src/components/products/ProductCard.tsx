@@ -75,8 +75,8 @@ export function ProductCard({ product }: ProductCardProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
+          product,
           post: postPreview,
-          imageUrl: product.imageUrl,
         }),
       });
 
@@ -85,11 +85,16 @@ export function ProductCard({ product }: ProductCardProps) {
         messageId?: string;
         publishType?: 'photo' | 'photo-with-text' | 'text-fallback';
         error?: string;
+        code?: string;
+        message?: string;
       }
 
       const data = (await response.json()) as PublishApiResponse;
       if (!response.ok || data.success === false) {
-        throw new Error(data.error || `HTTP error ${response.status}`);
+        if (data.code === 'PRODUCT_ALREADY_PUBLISHED' || data.code === 'DUPLICATE_RECORD_AFTER_PUBLISH') {
+          throw new Error('המוצר הזה כבר פורסם בטלגרם.');
+        }
+        throw new Error(data.message || data.error || `HTTP error ${response.status}`);
       }
 
       setPublishSuccess(true);
@@ -238,7 +243,11 @@ export function ProductCard({ product }: ProductCardProps) {
 
             {publishError && (
               <div className="p-2.5 bg-red-50 text-red-700 text-[10px] rounded-lg border border-red-200">
-                <strong>Publish Error:</strong> {publishError}
+                {publishError === 'המוצר הזה כבר פורסם בטלגרם.' ? (
+                  <strong>{publishError}</strong>
+                ) : (
+                  <><strong>Publish Error:</strong> {publishError}</>
+                )}
               </div>
             )}
 

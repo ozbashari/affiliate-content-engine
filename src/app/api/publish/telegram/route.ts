@@ -1,7 +1,14 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { TelegramPublisher } from '@/features/publishing/telegram-provider';
+import { runAutomationPipeline } from '@/features/automation';
+import { CatalogProduct } from '@/features/products/types';
+import { GeneratedPost } from '@/features/ai/types';
 
 export const dynamic = 'force-dynamic';
+
+interface PublishRequestShape {
+  product?: CatalogProduct;
+  post?: GeneratedPost;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,52 +16,63 @@ export async function POST(request: NextRequest) {
     
     if (!body || typeof body !== 'object') {
       return NextResponse.json(
-        { success: false, error: 'Invalid request body' },
+        { success: false, error: 'Invalid request body.' },
         { status: 400 }
       );
     }
 
-    const { post, imageUrl } = body as { post?: { fullText?: string; affiliateUrl?: string; title?: string; body?: string; hashtags?: string[]; cta?: string }; imageUrl?: string };
+    const { product, post } = body as PublishRequestShape;
 
-    if (!post || !post.fullText) {
+    if (!product) {
       return NextResponse.json(
-        { success: false, error: 'Missing required field: post' },
+        { success: false, error: 'Missing required field: product.' },
         { status: 400 }
       );
     }
 
-    if (!imageUrl) {
+    if (!post) {
       return NextResponse.json(
-        { success: false, error: 'Missing required field: imageUrl' },
+        { success: false, error: 'Missing required field: post.' },
         { status: 400 }
       );
     }
 
-    const publisher = new TelegramPublisher();
-    const result = await publisher.publish({
-      post: {
-        title: post.title || '',
-        body: post.body || '',
-        hashtags: post.hashtags || [],
-        cta: post.cta || '',
-        affiliateUrl: post.affiliateUrl || '',
-        fullText: post.fullText,
-      },
-      imageUrl,
+    // Call the automation pipeline with both the product and the pre-generated post
+    const result = await runAutomationPipeline({
+      product,
+      generatedPost: post,
     });
 
-    if (!result.success) {
+    if (result.alreadyPublished) {
       return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 500 }
+        {
+          success: false,
+          code: 'PRODUCT_ALREADY_PUBLISHED',
+          message: result.errorMessage || 'This product has already been published.',
+        },
+        { status: 409 }
+      );
+    }
+
+    if (!result.success) {
+      const code = result.errorCode || 'PUBLISH_FAILED';
+      const status = (code === 'DUPLICATE_RECORD_AFTER_PUBLISH' || code === 'PRODUCT_ALREADY_PUBLISHED') ? 409 : 500;
+      
+      return NextResponse.json(
+        {
+          success: false,
+          code,
+          message: result.errorMessage || 'Failed to publish product.',
+          messageId: result.telegramMessageId,
+        },
+        { status }
       );
     }
 
     return NextResponse.json({
       success: true,
-      messageId: result.externalId,
+      messageId: result.telegramMessageId,
       publishType: result.publishType,
-      photoMessageId: result.photoMessageId,
     });
   } catch (error: unknown) {
     return NextResponse.json(
