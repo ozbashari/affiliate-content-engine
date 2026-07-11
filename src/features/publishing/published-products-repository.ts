@@ -53,3 +53,33 @@ export async function savePublishedProduct(input: {
     throw new Error(`Failed to save published product: ${error.message}`);
   }
 }
+
+export async function getPublishedExternalIds(
+  source: string,
+  externalIds: string[]
+): Promise<Set<string>> {
+  if (externalIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const supabase = getSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('published_products')
+    .select('external_id')
+    .eq('source', source)
+    .in('external_id', externalIds);
+
+  if (error) {
+    throw new Error(`Failed to check published external IDs: ${error.message}`);
+  }
+
+  const publishedSet = new Set<string>();
+  if (data) {
+    for (const row of data as Array<{ external_id: string }>) {
+      publishedSet.add(row.external_id);
+    }
+  }
+
+  return publishedSet;
+}

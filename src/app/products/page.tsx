@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { CatalogProduct } from '@/features/products/types';
-import { mapToCatalogProduct } from '@/features/providers/aliexpress/mapper';
 import { ProductGrid } from '@/components/products/ProductGrid';
 import { SUPPORTED_CATEGORIES } from '@/features/categories/categories';
 
@@ -20,37 +19,35 @@ export default function ProductsPage() {
     
     const categoryName = SUPPORTED_CATEGORIES.find(c => c.id === selectedCategoryId)?.name || 'Unknown';
     setScannedCategoryName(categoryName);
-
+    
     try {
       const response = await fetch(`/api/dev/aliexpress/products?category_ids=${selectedCategoryId}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-      }
       
-      const data = await response.json();
-      
-      // Check for errors returned inside response body
-      if (data.success === false) {
-        throw new Error(data.error || 'Failed to fetch products');
-      }
-
-      // Handle raw response containing aliexpress query result
-      const rawProducts = data.response?.aliexpress_affiliate_product_query_response?.resp_result?.result?.products?.product;
-      
-      if (!rawProducts || (Array.isArray(rawProducts) && rawProducts.length === 0)) {
-        // Check for error_response inside rawResponse
-        const errResp = data.response?.error_response;
-        if (errResp) {
-          throw new Error(`AliExpress API error: ${errResp.msg} (${errResp.sub_msg || errResp.sub_code || 'Unknown error'})`);
-        }
-        
-        throw new Error(`No products returned from AliExpress for category "${categoryName}". Check your category parameter or credentials.`);
+      interface ProductsApiResponse {
+        success?: boolean;
+        error?: string;
+        products?: CatalogProduct[];
+        meta?: {
+          fetchedCount: number;
+          unpublishedCount: number;
+          filteredPublishedCount: number;
+          mappingFailedCount: number;
+        };
       }
 
-      const list = Array.isArray(rawProducts) ? rawProducts : [rawProducts];
-      const mapped = list.map((item: any) => mapToCatalogProduct(item));
-      setProducts(mapped);
-    } catch (err: any) {
+      const data = (await response.json()) as ProductsApiResponse;
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || `HTTP error ${response.status}`);
+      }
+
+      const list = data.products;
+      if (!list || list.length === 0) {
+        throw new Error(`No unpublished products returned from AliExpress for category "${categoryName}". Check your category parameter or credentials.`);
+      }
+
+      setProducts(list);
+    } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
