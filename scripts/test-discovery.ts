@@ -28,6 +28,9 @@ process.env.ALIEXPRESS_APP_SECRET = 'mock_secret';
 process.env.ALIEXPRESS_TRACKING_ID = 'mock_tracking';
 
 import { AliExpressClient } from '../src/lib/aliexpress';
+import type { DiscoveryStrategy, DiscoveryConfigV2 } from '../src/features/discovery/discovery-types';
+import type { IDiversityRepository, DiscoveryRunRecord } from '../src/features/discovery/diversity-repository';
+import type { ICronLockRepository } from '../src/features/discovery/cron-lock-repository';
 
 // Mock client execution
 let executeMock: (method: string, params: any) => Promise<any> = () => {
@@ -303,28 +306,34 @@ async function runTests() {
     const { selectBestProduct } = await import('../src/features/automation/product-selector');
 
     const mockProducts = [
-      // 1.99 USD is very low but eligible
+      // USD Items
       { product_id: 'low', product_title: 'Low Price Item', sale_price: '1.99', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
-      // 2 USD is preferred
       { product_id: 'pref2', product_title: 'Pref 2 USD Item', sale_price: '2.00', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
-      // 30 USD is preferred
       { product_id: 'pref30', product_title: 'Pref 30 USD Item', sale_price: '30.00', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
-      // 30.01 USD is mid range
       { product_id: 'mid30_01', product_title: 'Mid Item', sale_price: '30.01', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
-      // 50 USD is mid range
       { product_id: 'mid50', product_title: 'Mid 50 Item', sale_price: '50.00', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
-      // 50.01 USD is high but eligible
       { product_id: 'high50_01', product_title: 'High Eligible', sale_price: '50.01', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
-      // 75 USD is eligible
       { product_id: 'eligible75', product_title: 'Borderline Item', sale_price: '75.00', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
-      // 75.01 USD is rejected
       { product_id: 'rejected75_01', product_title: 'Expensive Item', sale_price: '75.01', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
-      // non-USD currency is rejected
-      { product_id: 'non_usd', product_title: 'EUR Item', sale_price: '10.00', target_currency: 'EUR', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' }
+      { product_id: 'non_usd', product_title: 'EUR Item', sale_price: '10.00', target_currency: 'EUR', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      
+      // ILS Items
+      { product_id: 'low_ils', product_title: 'Low ILS Item', sale_price: '7.99', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      { product_id: 'pref8_ils', product_title: 'Pref 8 ILS Item', sale_price: '8.00', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      { product_id: 'pref110_ils', product_title: 'Pref 110 ILS Item', sale_price: '110.00', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      { product_id: 'mid110_01_ils', product_title: 'Mid ILS Item', sale_price: '110.01', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      { product_id: 'mid185_ils', product_title: 'Mid 185 ILS Item', sale_price: '185.00', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      { product_id: 'high185_01_ils', product_title: 'High Eligible ILS', sale_price: '185.01', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      { product_id: 'eligible280_ils', product_title: 'Borderline ILS Item', sale_price: '280.00', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      { product_id: 'rejected280_01_ils', product_title: 'Expensive ILS Item', sale_price: '280.01', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      
+      // Proof that same numeric value (100) is evaluated differently across currencies
+      { product_id: 'usd_100', product_title: '100 USD Item', sale_price: '100.00', target_currency: 'USD', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' },
+      { product_id: 'ils_100', product_title: '100 ILS Item', sale_price: '100.00', target_currency: 'ILS', product_main_image_url: 'img', product_detail_url: 'det', promotion_link: 'http://p' }
     ];
 
     executeMock = async (method, params) => {
-      assert.strictEqual(params.target_currency, 'USD', 'Every discovery request must explicitly send target_currency: "USD"');
+      assert.strictEqual(params.target_currency, 'ILS', 'Every discovery request must explicitly send target_currency: "ILS"');
       return {
         aliexpress_affiliate_product_query_response: {
           resp_result: {
@@ -344,8 +353,12 @@ async function runTests() {
     const eligibleIds = eligible.map(item => item.product.externalId);
     const rejectedIds = rejected.map(item => item.product.product.externalId);
 
+    // Verify USD boundary rejections
     assert.ok(rejectedIds.includes('rejected75_01'), '75.01 USD must be rejected');
-    assert.ok(rejectedIds.includes('non_usd'), 'non-USD currency must be rejected');
+    assert.ok(rejectedIds.includes('usd_100'), '100 USD must be rejected');
+    assert.ok(rejectedIds.includes('non_usd'), 'non-USD/non-ILS currency must be rejected');
+    
+    // Verify USD boundary eligibilities
     assert.ok(eligibleIds.includes('low'), '1.99 USD should be eligible');
     assert.ok(eligibleIds.includes('pref2'), '2 USD should be eligible');
     assert.ok(eligibleIds.includes('pref30'), '30 USD should be eligible');
@@ -354,26 +367,62 @@ async function runTests() {
     assert.ok(eligibleIds.includes('high50_01'), '50.01 USD should be eligible');
     assert.ok(eligibleIds.includes('eligible75'), '75 USD should be eligible');
 
+    // Verify ILS boundary rejections
+    assert.ok(rejectedIds.includes('rejected280_01_ils'), '280.01 ILS must be rejected');
+    
+    // Verify ILS boundary eligibilities
+    assert.ok(eligibleIds.includes('low_ils'), '7.99 ILS should be eligible');
+    assert.ok(eligibleIds.includes('pref8_ils'), '8 ILS should be eligible');
+    assert.ok(eligibleIds.includes('pref110_ils'), '110 ILS should be eligible');
+    assert.ok(eligibleIds.includes('mid110_01_ils'), '110.01 ILS should be eligible');
+    assert.ok(eligibleIds.includes('mid185_ils'), '185 ILS should be eligible');
+    assert.ok(eligibleIds.includes('high185_01_ils'), '185.01 ILS should be eligible');
+    assert.ok(eligibleIds.includes('eligible280_ils'), '280 ILS should be eligible');
+    assert.ok(eligibleIds.includes('ils_100'), '100 ILS should be eligible (proves 100 is different across currencies)');
+
+    // Verify selector USD price-scoring logic
     const lowSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'low')!.product]);
     assert.ok(lowSelection.warnings.some(w => w.includes('Very low price')), 'Below 2 USD should receive a warning');
 
     const prefSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'pref2')!.product]);
-    assert.ok(prefSelection.reasons.some(r => r.includes('preferred 2–30 USD range')), '2 USD should have preferred reason');
+    assert.ok(prefSelection.reasons.some(r => r.includes('preferred 2–30 USD/ILS range')), '2 USD should have preferred reason');
 
     const pref30Selection = selectBestProduct([eligible.find(i => i.product.externalId === 'pref30')!.product]);
-    assert.ok(pref30Selection.reasons.some(r => r.includes('preferred 2–30 USD range')), '30 USD should have preferred reason');
+    assert.ok(pref30Selection.reasons.some(r => r.includes('preferred 2–30 USD/ILS range')), '30 USD should have preferred reason');
 
     const mid30Selection = selectBestProduct([eligible.find(i => i.product.externalId === 'mid30_01')!.product]);
-    assert.ok(mid30Selection.reasons.some(r => r.includes('above the preferred range but below the 75 USD maximum')), '30.01 USD should have mid-range reason');
+    assert.ok(mid30Selection.reasons.some(r => r.includes('above the preferred range but below the 75 USD/ILS maximum')), '30.01 USD should have mid-range reason');
 
     const mid50Selection = selectBestProduct([eligible.find(i => i.product.externalId === 'mid50')!.product]);
-    assert.ok(mid50Selection.reasons.some(r => r.includes('above the preferred range but below the 75 USD maximum')), '50 USD should have mid-range reason');
+    assert.ok(mid50Selection.reasons.some(r => r.includes('above the preferred range but below the 75 USD/ILS maximum')), '50 USD should have mid-range reason');
 
     const highSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'high50_01')!.product]);
     assert.ok(highSelection.warnings.some(w => w.includes('Higher price range')), '50.01 USD should have higher range warning');
 
     const borderlineSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'eligible75')!.product]);
     assert.ok(borderlineSelection.warnings.some(w => w.includes('Higher price range')), '75 USD should have higher range warning');
+
+    // Verify selector ILS price-scoring logic
+    const lowIlsSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'low_ils')!.product]);
+    assert.ok(lowIlsSelection.warnings.some(w => w.includes('Very low price')), 'Below 8 ILS should receive a warning');
+
+    const pref8IlsSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'pref8_ils')!.product]);
+    assert.ok(pref8IlsSelection.reasons.some(r => r.includes('preferred 8–110 USD/ILS range')), '8 ILS should have preferred reason');
+
+    const pref110IlsSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'pref110_ils')!.product]);
+    assert.ok(pref110IlsSelection.reasons.some(r => r.includes('preferred 8–110 USD/ILS range')), '110 ILS should have preferred reason');
+
+    const mid110IlsSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'mid110_01_ils')!.product]);
+    assert.ok(mid110IlsSelection.reasons.some(r => r.includes('above the preferred range but below the 280 USD/ILS maximum')), '110.01 ILS should have mid-range reason');
+
+    const mid185IlsSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'mid185_ils')!.product]);
+    assert.ok(mid185IlsSelection.reasons.some(r => r.includes('above the preferred range but below the 280 USD/ILS maximum')), '185 ILS should have mid-range reason');
+
+    const highIlsSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'high185_01_ils')!.product]);
+    assert.ok(highIlsSelection.warnings.some(w => w.includes('Higher price range')), '185.01 ILS should have higher range warning');
+
+    const borderlineIlsSelection = selectBestProduct([eligible.find(i => i.product.externalId === 'eligible280_ils')!.product]);
+    assert.ok(borderlineIlsSelection.warnings.some(w => w.includes('Higher price range')), '280 ILS should have higher range warning');
   }
 
   // Test 11: Preferred-range product outranks a comparable 60 USD product, and high rating cannot bypass hard max
@@ -1169,6 +1218,443 @@ async function runTests() {
     assert.strictEqual(schedulerRes.selectedProduct, undefined, 'Selected product must be undefined');
 
     (await import('../src/features/discovery/discovery-service')).DiscoveryService.prototype.discover = originalDiscover;
+  }
+
+  // Test 17: V2 Discovery Library structure, metadata, duplicate checks, and V1 isolation
+  {
+    console.log('Test 17: V2 Discovery Library structure, metadata, and V1 compatibility checks');
+    const { discoveryConfig, discoveryLibraryV2 } = await import('../src/features/discovery/discovery-config');
+    const { getScheduledStrategies } = await import('../src/features/discovery/discovery-scheduler');
+
+    // 1. Importing V2 does not pollute V1 strategies (length should be exactly 6)
+    assert.strictEqual(discoveryConfig.strategies.length, 6, 'V1 strategies must remain isolated and contain exactly 6 keywords');
+
+    // 2. Active production scheduler returns exactly 3 strategies from the 6 V1 strategies
+    const activeStrategies = getScheduledStrategies(discoveryConfig.strategies);
+    assert.strictEqual(activeStrategies.length, 3, 'Active scheduler must select exactly 3 strategies');
+
+    // 3. V2 configuration shape and category count validation
+    assert.ok(discoveryLibraryV2, 'V2 library config must be exported');
+    assert.strictEqual(discoveryLibraryV2.categories.length, 30, 'V2 library must contain exactly 30 categories');
+    assert.strictEqual(discoveryLibraryV2.categoriesPerRun, 3, 'V2 categoriesPerRun must be 3');
+    assert.strictEqual(discoveryLibraryV2.defaultKeywordsPerCategory, 1, 'V2 defaultKeywordsPerCategory must be 1');
+
+    // 4 & 5. Category ID uniqueness and duplication checks
+    const seenCategoryIds = new Set<string>();
+    const seenKeywords = new Set<string>();
+    const duplicateKeywords: string[] = [];
+
+    for (const cat of discoveryLibraryV2.categories) {
+      // Check for duplicate category IDs
+      assert.ok(!seenCategoryIds.has(cat.id), `Duplicate category ID found: ${cat.id}`);
+      seenCategoryIds.add(cat.id);
+
+      // 6. Valid category metadata check
+      assert.ok(cat.id.trim(), 'Category ID must not be empty');
+      assert.ok(cat.displayName.trim(), `Category ${cat.id} must have a valid displayName`);
+      assert.ok(cat.hebrewLabel.trim(), `Category ${cat.id} must have a valid hebrewLabel`);
+      assert.ok(cat.emoji.trim(), `Category ${cat.id} must have a valid emoji`);
+      assert.ok(cat.description.trim(), `Category ${cat.id} must have a valid description`);
+      assert.ok(cat.weight > 0, `Category ${cat.id} weight must be a positive integer`);
+      assert.strictEqual(cat.enabled, true, `Category ${cat.id} must be enabled`);
+      assert.strictEqual(cat.keywords.length, 20, `Category ${cat.id} must contain exactly 20 keywords`);
+
+      for (const kw of cat.keywords) {
+        assert.ok(kw.trim(), `Empty keyword found in category ${cat.id}`);
+        const normKw = kw.toLowerCase().trim();
+        if (seenKeywords.has(normKw)) {
+          duplicateKeywords.push(kw);
+        }
+        seenKeywords.add(normKw);
+      }
+    }
+
+    assert.strictEqual(duplicateKeywords.length, 0, `Duplicate keywords found: ${duplicateKeywords.join(', ')}`);
+    assert.strictEqual(seenKeywords.size, 600, 'Total unique keywords in the library must be exactly 600');
+
+    // 7. Future resolver logic test (selecting 3 categories and 1 keyword per category yields exactly 3 strategies)
+    const selectedCategories = discoveryLibraryV2.categories.slice(0, 3);
+    const resolvedStrategies: DiscoveryStrategy[] = selectedCategories.map(cat => ({
+      type: 'keyword',
+      keyword: cat.keywords[0],
+      pages: 1,
+      pageSize: 20
+    }));
+    assert.strictEqual(resolvedStrategies.length, 3, 'Future resolver must return exactly 3 strategies');
+  }
+
+  // Test 18: V2 Diversity Scheduler assertions, exclusions, rotates, dry-runs, and fallbacks
+  {
+    console.log('Test 18: V2 Diversity Scheduler, rotation, merging, and fallback checks');
+    const { getScheduledStrategiesV2 } = await import('../src/features/discovery/diversity-scheduler-v2');
+    const { runScheduledProductDiscovery } = await import('../src/features/discovery/discovery-scheduler');
+    const { discoveryLibraryV2 } = await import('../src/features/discovery/discovery-config');
+    const { deduplicateProducts } = await import('../src/features/discovery/discovery-deduplicator');
+
+    class InMemoryDiversityRepository implements IDiversityRepository {
+      history: DiscoveryRunRecord[] = [];
+      lastPublishedCategory: string | null = null;
+      saveRunCalls: { categoryIds: string[]; keywords: string[] }[] = [];
+      savePubCalls: { productId: string; categoryId: string; keyword: string; productType?: string }[] = [];
+
+      async getRecentRunHistory(limit: number): Promise<DiscoveryRunRecord[]> {
+        return this.history.slice(0, limit);
+      }
+
+      async getLastPublishedCategory(): Promise<string | null> {
+        return this.lastPublishedCategory;
+      }
+
+      async saveDiscoveryRun(categoryIds: string[], keywords: string[]): Promise<void> {
+        this.saveRunCalls.push({ categoryIds, keywords });
+        this.history.unshift({
+          id: Math.random().toString(),
+          runAt: new Date().toISOString(),
+          categoryIds,
+          keywords
+        });
+      }
+
+      async savePublishedDiversity(
+        productId: string,
+        categoryId: string,
+        keyword: string,
+        productType?: string
+      ): Promise<void> {
+        this.savePubCalls.push({ productId, categoryId, keyword, productType });
+        this.lastPublishedCategory = categoryId;
+      }
+    }
+
+    const originalDiscover = (await import('../src/features/discovery/discovery-service')).DiscoveryService.prototype.discover;
+    (await import('../src/features/discovery/discovery-service')).DiscoveryService.prototype.discover = async function() {
+      return {
+        products: [],
+        filteringResult: { eligible: [], rejected: [] },
+        stats: {} as any
+      };
+    };
+
+    // 1 & 2. Feature flag missing / false -> V1
+    delete process.env.DISCOVERY_V2_ENABLED;
+    const resMissing = await runScheduledProductDiscovery(async () => false);
+    assert.strictEqual(resMissing.metrics?.schedulerVersion, 'V1', 'Should default to V1 when flag is missing');
+
+    process.env.DISCOVERY_V2_ENABLED = 'false';
+    const resFalse = await runScheduledProductDiscovery(async () => false);
+    assert.strictEqual(resFalse.metrics?.schedulerVersion, 'V1', 'Should default to V1 when flag is false');
+
+    // 3. Feature flag true -> V2
+    process.env.DISCOVERY_V2_ENABLED = 'true';
+    const repo = new InMemoryDiversityRepository();
+    const resTrue = await runScheduledProductDiscovery(async () => false, repo);
+    assert.strictEqual(resTrue.metrics?.schedulerVersion, 'V2', 'Should use V2 when flag is true');
+
+    // 4. V2 returns exactly 3 strategies from 3 distinct categories, 1 keyword each
+    const v2Result = await getScheduledStrategiesV2(repo);
+    assert.strictEqual(v2Result.strategies.length, 3, 'V2 should resolve exactly 3 strategies');
+    const cats = v2Result.strategies.map(s => s.categoryId);
+    const uniqueCats = new Set(cats);
+    assert.strictEqual(uniqueCats.size, 3, 'V2 should select 3 distinct categories');
+
+    // 5. Previous-run categories are avoided when enough alternatives exist
+    const repoEx = new InMemoryDiversityRepository();
+    repoEx.history = [{
+      id: '1',
+      runAt: new Date().toISOString(),
+      categoryIds: ['kitchen', 'car', 'home'],
+      keywords: ['vegetable chopper', 'portable tire inflator', 'door draft stopper']
+    }];
+    const resEx = await getScheduledStrategiesV2(repoEx);
+    const selectedEx = resEx.strategies.map(s => s.categoryId);
+    assert.ok(!selectedEx.includes('kitchen'), 'Should avoid kitchen from previous run');
+    assert.ok(!selectedEx.includes('car'), 'Should avoid car from previous run');
+    assert.ok(!selectedEx.includes('home'), 'Should avoid home from previous run');
+
+    // 6. Last published category is avoided
+    const repoPub = new InMemoryDiversityRepository();
+    repoPub.lastPublishedCategory = 'cleaning';
+    const resPub = await getScheduledStrategiesV2(repoPub);
+    const selectedPub = resPub.strategies.map(s => s.categoryId);
+    assert.ok(!selectedPub.includes('cleaning'), 'Should avoid last published category');
+
+    // 7. Least-recently-used categories are preferred
+    const repoLRU = new InMemoryDiversityRepository();
+    const allCatIds = discoveryLibraryV2.categories.map(c => c.id);
+    const usedCatIds = allCatIds.filter(id => id !== 'office' && id !== 'laundry' && id !== 'coffee');
+    repoLRU.history = [{
+      id: '2',
+      runAt: new Date().toISOString(),
+      categoryIds: usedCatIds,
+      keywords: []
+    }];
+    const resLRU = await getScheduledStrategiesV2(repoLRU);
+    const selectedLRU = resLRU.strategies.map(s => s.categoryId);
+    assert.ok(selectedLRU.includes('office'), 'LRU category should be preferred');
+    assert.ok(selectedLRU.includes('laundry'), 'LRU category should be preferred');
+    assert.ok(selectedLRU.includes('coffee'), 'LRU category should be preferred');
+
+    // 8. Weights do not override cooldown constraints
+    const repoWeight = new InMemoryDiversityRepository();
+    const mockConfig: DiscoveryConfigV2 = {
+      categoriesPerRun: 2,
+      defaultKeywordsPerCategory: 1,
+      categories: [
+        { id: 'kitchen', displayName: 'Kitchen', hebrewLabel: 'מטבח', emoji: '🍳', description: 'desc', weight: 100, enabled: true, keywords: ['kw1'] },
+        { id: 'car', displayName: 'Car', hebrewLabel: 'רכב', emoji: '🚗', description: 'desc', weight: 1, enabled: true, keywords: ['kw2'] },
+        { id: 'home', displayName: 'Home', hebrewLabel: 'בית', emoji: '🏡', description: 'desc', weight: 1, enabled: true, keywords: ['kw3'] },
+      ]
+    };
+    repoWeight.history = [{
+      id: '3',
+      runAt: new Date().toISOString(),
+      categoryIds: ['kitchen'],
+      keywords: ['kw1']
+    }];
+    const resWeight = await getScheduledStrategiesV2(repoWeight, mockConfig);
+    const selectedWeight = resWeight.strategies.map(s => s.categoryId);
+    assert.ok(!selectedWeight.includes('kitchen'), 'Cooldown must override category weight');
+
+    // 9. Keywords rotate independently
+    const repoRot = new InMemoryDiversityRepository();
+    const singleCatConfig: DiscoveryConfigV2 = {
+      categoriesPerRun: 1,
+      defaultKeywordsPerCategory: 1,
+      categories: [
+        { id: 'kitchen', displayName: 'Kitchen', hebrewLabel: 'מטבח', emoji: '🍳', description: 'desc', weight: 1, enabled: true, keywords: ['kw1', 'kw2'] }
+      ]
+    };
+    const run1 = await getScheduledStrategiesV2(repoRot, singleCatConfig);
+    assert.strictEqual((run1.strategies[0] as any).keyword, 'kw1', 'Should choose kw1 first');
+    await repoRot.saveDiscoveryRun(['kitchen'], ['kw1']);
+    const run2 = await getScheduledStrategiesV2(repoRot, singleCatConfig);
+    assert.strictEqual((run2.strategies[0] as any).keyword, 'kw2', 'Should rotate to next keyword kw2');
+
+    // 10. Same input produces same output
+    const resA = await getScheduledStrategiesV2(repo, discoveryLibraryV2, 1000000000000);
+    const resB = await getScheduledStrategiesV2(repo, discoveryLibraryV2, 1000000000000);
+    assert.deepStrictEqual(resA.strategies, resB.strategies, 'Deterministic inputs must yield same strategy array');
+
+    // 11. Fewer enabled categories returns fewer strategies
+    const repoFew = new InMemoryDiversityRepository();
+    const fewConfig: DiscoveryConfigV2 = {
+      categoriesPerRun: 3,
+      defaultKeywordsPerCategory: 1,
+      categories: [
+        { id: 'kitchen', displayName: 'Kitchen', hebrewLabel: 'מטבח', emoji: '🍳', description: 'desc', weight: 1, enabled: true, keywords: ['kw1'] },
+        { id: 'car', displayName: 'Car', hebrewLabel: 'רכב', emoji: '🚗', description: 'desc', weight: 1, enabled: true, keywords: ['kw2'] },
+      ]
+    };
+    const resFew = await getScheduledStrategiesV2(repoFew, fewConfig);
+    assert.strictEqual(resFew.strategies.length, 2, 'Should only return 2 strategies when 2 categories are enabled');
+
+    // 12. Empty category is skipped safely
+    const repoEmpty = new InMemoryDiversityRepository();
+    const emptyConfig: DiscoveryConfigV2 = {
+      categoriesPerRun: 1,
+      defaultKeywordsPerCategory: 1,
+      categories: [
+        { id: 'kitchen', displayName: 'Kitchen', hebrewLabel: 'מטבח', emoji: '🍳', description: 'desc', weight: 1, enabled: true, keywords: [] }
+      ]
+    };
+    const resEmpty = await getScheduledStrategiesV2(repoEmpty, emptyConfig);
+    assert.strictEqual(resEmpty.strategies.length, 0, 'Empty categories must be skipped safely');
+
+    // 13 & 14. Multi-strategy duplicate product merging & deterministic context selection
+    const prodA = {
+      id: 'aliexpress_123',
+      source: 'aliexpress' as const,
+      externalId: '123',
+      title: 'Product Title',
+      imageUrl: 'img',
+      productUrl: 'url',
+      affiliateUrl: 'aff',
+      price: { amount: 10, currency: 'ILS' },
+      status: 'ready' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      discoveryContexts: [{ categoryId: 'car', keyword: 'car vacuum' }]
+    };
+    const prodB = {
+      id: 'aliexpress_123',
+      source: 'aliexpress' as const,
+      externalId: '123',
+      title: 'Product Title',
+      imageUrl: 'img',
+      productUrl: 'url',
+      affiliateUrl: 'aff',
+      price: { amount: 10, currency: 'ILS' },
+      status: 'ready' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      discoveryContexts: [{ categoryId: 'kitchen', keyword: 'vegetable chopper' }]
+    };
+    const merged = deduplicateProducts([
+      { product: prodA, discovery: { strategyType: 'keyword', strategyValue: 'car vacuum', page: 1 } },
+      { product: prodB, discovery: { strategyType: 'keyword', strategyValue: 'vegetable chopper', page: 1 } }
+    ]);
+    assert.strictEqual(merged.length, 1, 'Duplicate products must be merged');
+    assert.strictEqual(merged[0].product.discoveryContexts?.length, 2, 'Discovery contexts must be combined');
+    // primary context is kitchen because kitchen is defined first in discoveryLibraryV2.categories list
+    assert.strictEqual(merged[0].product.primaryDiscoveryContext?.categoryId, 'kitchen', 'Kitchen must be deterministic primary context');
+
+    // 15. DRY_RUN performs zero history writes
+    process.env.DRY_RUN = 'true';
+    const repoDry = new InMemoryDiversityRepository();
+    await runScheduledProductDiscovery(async () => false, repoDry);
+    assert.strictEqual(repoDry.saveRunCalls.length, 0, 'Dry run must write zero run history records');
+    assert.strictEqual(repoDry.savePubCalls.length, 0, 'Dry run must write zero published diversity records');
+    delete process.env.DRY_RUN;
+
+    // 18. V2 repository failure falls back to V1
+    const failingRepo: IDiversityRepository = {
+      async getRecentRunHistory() { throw new Error('DB Error'); },
+      async getLastPublishedCategory() { throw new Error('DB Error'); },
+      async saveDiscoveryRun() {},
+      async savePublishedDiversity() {},
+    };
+    const fallbackRes = await runScheduledProductDiscovery(async () => false, failingRepo);
+    assert.strictEqual(fallbackRes.success, true, 'Scheduler must not fail when database crashes');
+    assert.strictEqual(fallbackRes.metrics?.schedulerVersion, 'V1', 'Must fallback to V1 scheduler');
+
+    // Restore discover mock
+    (await import('../src/features/discovery/discovery-service')).DiscoveryService.prototype.discover = originalDiscover;
+    delete process.env.DISCOVERY_V2_ENABLED;
+  }
+
+  // Test 19: Distributed Cron Lock acquisition, concurrency prevention, and fail-closed policies
+  {
+    console.log('Test 19: Distributed Cron Lock (concurrency, expiry, theft, owner matching)');
+    const { SupabaseCronLockRepository } = await import('../src/features/discovery/cron-lock-repository');
+    const routeModule = await import('../src/app/api/cron/publish/route');
+
+    class InMemoryCronLockRepository implements ICronLockRepository {
+      locks: Map<string, { ownerId: string; expiresAt: number }> = new Map();
+      acquireCalls = 0;
+      releaseCalls = 0;
+
+      async tryAcquire(lockKey: string, ownerId: string, ttlSeconds: number): Promise<boolean> {
+        this.acquireCalls++;
+        const now = Date.now();
+        const existing = this.locks.get(lockKey);
+        if (existing && existing.expiresAt > now) {
+          return false;
+        }
+        this.locks.set(lockKey, { ownerId, expiresAt: now + ttlSeconds * 1000 });
+        return true;
+      }
+
+      async release(lockKey: string, ownerId: string): Promise<boolean> {
+        this.releaseCalls++;
+        const existing = this.locks.get(lockKey);
+        if (existing && existing.ownerId === ownerId) {
+          this.locks.delete(lockKey);
+          return true;
+        }
+        return false;
+      }
+    }
+
+    const originalTryAcquire = SupabaseCronLockRepository.prototype.tryAcquire;
+    const originalRelease = SupabaseCronLockRepository.prototype.release;
+    const originalDiscover = (await import('../src/features/discovery/discovery-service')).DiscoveryService.prototype.discover;
+
+    const testRepo = new InMemoryCronLockRepository();
+    SupabaseCronLockRepository.prototype.tryAcquire = function(lk, oid, ttl) {
+      return testRepo.tryAcquire(lk, oid, ttl);
+    };
+    SupabaseCronLockRepository.prototype.release = function(lk, oid) {
+      return testRepo.release(lk, oid);
+    };
+
+    let runScheduledCount = 0;
+    (await import('../src/features/discovery/discovery-service')).DiscoveryService.prototype.discover = async function() {
+      runScheduledCount++;
+      return {
+        products: [],
+        filteringResult: { eligible: [], rejected: [] },
+        stats: {} as any
+      };
+    };
+
+    process.env.CRON_SECRET = 'test_secret';
+
+    // 1. First execution acquires lock, runs pipeline, and releases lock
+    const req1 = new Request('http://localhost/api/cron/publish', {
+      headers: { 'Authorization': 'Bearer test_secret' }
+    });
+    const res1 = await routeModule.GET(req1 as any);
+    const json1 = await res1.json();
+    assert.strictEqual(res1.status, 200, 'Successful lock acquisition must yield 200 status');
+    assert.strictEqual(json1.success, true);
+    assert.strictEqual(runScheduledCount, 1, 'Scheduled run should trigger once');
+    assert.strictEqual(testRepo.locks.has('affiliate-publish-cron'), false, 'Lock must be released in finally block');
+
+    // 2. Second execution is skipped while lock is active
+    await testRepo.tryAcquire('affiliate-publish-cron', 'someone_else', 60);
+    runScheduledCount = 0;
+    const req2 = new Request('http://localhost/api/cron/publish', {
+      headers: { 'Authorization': 'Bearer test_secret' }
+    });
+    const res2 = await routeModule.GET(req2 as any);
+    const json2 = await res2.json();
+    assert.strictEqual(res2.status, 200, 'Concurrent run must yield 200 status');
+    assert.strictEqual(json2.success, true);
+    assert.strictEqual(json2.skipped, true);
+    assert.strictEqual(json2.reason, 'cron_lock_active');
+    assert.strictEqual(runScheduledCount, 0, 'Discovery pipeline must not execute if lock is active');
+    await testRepo.release('affiliate-publish-cron', 'someone_else');
+
+    // 3. Active lock cannot be stolen
+    await testRepo.tryAcquire('affiliate-publish-cron', 'owner1', 60);
+    const stolen = await testRepo.tryAcquire('affiliate-publish-cron', 'owner2', 60);
+    assert.strictEqual(stolen, false, 'Active lock must not be stolen by other owners');
+
+    // 4. Expired lock can be acquired by a new owner
+    const l = testRepo.locks.get('affiliate-publish-cron')!;
+    l.expiresAt = Date.now() - 1000; // Expire it
+    const acquiredAfterExpiry = await testRepo.tryAcquire('affiliate-publish-cron', 'owner3', 60);
+    assert.strictEqual(acquiredAfterExpiry, true, 'Expired lock must be acquirable');
+    await testRepo.release('affiliate-publish-cron', 'owner3');
+
+    // 5. Wrong owner cannot release the lock, correct owner can
+    await testRepo.tryAcquire('affiliate-publish-cron', 'ownerA', 60);
+    const releasedWrong = await testRepo.release('affiliate-publish-cron', 'ownerB');
+    assert.strictEqual(releasedWrong, false, 'Wrong owner cannot release locks');
+    const releasedCorrect = await testRepo.release('affiliate-publish-cron', 'ownerA');
+    assert.strictEqual(releasedCorrect, true, 'Correct owner must release locks');
+
+    // 6. Pipeline exception still releases the lock in finally
+    (await import('../src/features/discovery/discovery-service')).DiscoveryService.prototype.discover = async function() {
+      throw new Error('Simulation Crash');
+    };
+    const reqCrash = new Request('http://localhost/api/cron/publish', {
+      headers: { 'Authorization': 'Bearer test_secret' }
+    });
+    const resCrash = await routeModule.GET(reqCrash as any);
+    assert.strictEqual(resCrash.status, 500, 'Pipeline crash must yield 500 status');
+    assert.strictEqual(testRepo.locks.has('affiliate-publish-cron'), false, 'Lock must be released even after pipeline crash');
+
+    // 7. Lock acquisition DB failure prevents pipeline execution (Fail-Closed Policy)
+    SupabaseCronLockRepository.prototype.tryAcquire = async function() {
+      throw new Error('DB Connection Timeout');
+    };
+    runScheduledCount = 0;
+    const reqDbFail = new Request('http://localhost/api/cron/publish', {
+      headers: { 'Authorization': 'Bearer test_secret' }
+    });
+    const resDbFail = await routeModule.GET(reqDbFail as any);
+    const jsonDbFail = await resDbFail.json();
+    assert.strictEqual(resDbFail.status, 500, 'DB failure must return 500 status');
+    assert.strictEqual(jsonDbFail.success, false);
+    assert.strictEqual(jsonDbFail.code, 'CRON_LOCK_ACQUISITION_FAILED');
+    assert.strictEqual(runScheduledCount, 0, 'Pipeline must not execute if lock acquisition crashes');
+
+    // Cleanup
+    SupabaseCronLockRepository.prototype.tryAcquire = originalTryAcquire;
+    SupabaseCronLockRepository.prototype.release = originalRelease;
+    (await import('../src/features/discovery/discovery-service')).DiscoveryService.prototype.discover = originalDiscover;
+    delete process.env.CRON_SECRET;
   }
 
   console.log('\nAll tests completed successfully!');

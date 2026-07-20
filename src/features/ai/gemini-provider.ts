@@ -58,6 +58,67 @@ export function validateGeminiResponse(parsed: unknown): GeminiJSONResponse {
   };
 }
 
+export function formatPriceForAI(amount: number, currency: string): string {
+  const cleanCurrency = currency.toUpperCase();
+  const formattedAmount = amount % 1 === 0 ? String(Math.floor(amount)) : amount.toFixed(2);
+  if (cleanCurrency === 'ILS') {
+    return `₪${formattedAmount}`;
+  }
+  if (cleanCurrency === 'USD') {
+    return `$${formattedAmount}`;
+  }
+  return `${formattedAmount} ${currency}`;
+}
+
+export function postProcessTelegramPost(
+  text: string,
+  price: { amount: number; currency: string },
+  originalPrice?: { amount: number; currency: string }
+): string {
+  const formattedPrice = formatPriceForAI(price.amount, price.currency);
+  const formattedOriginal = originalPrice
+    ? formatPriceForAI(originalPrice.amount, originalPrice.currency)
+    : undefined;
+
+  const priceRegex = /מחיר:\s*💰?\s*([^במקום\r\n(]+)(?:\((?:במקום|מקור)\s*([^)\r\n]+)\))?/gi;
+
+  let processed = text.replace(priceRegex, () => {
+    if (formattedOriginal) {
+      return `💰 ${formattedPrice} (במקום ${formattedOriginal})`;
+    }
+    return `💰 ${formattedPrice}`;
+  });
+
+  processed = processed.replace(/💰\s*💰/gi, '💰');
+
+  if (price.currency.toUpperCase() === 'ILS') {
+    processed = processed.replace(/💰?\s*(?:USD|ILS|\$|ש"ח|₪)\s*([\d.]+)/gi, (m, val) => {
+      const parsedVal = parseFloat(val);
+      if (!isNaN(parsedVal) && Math.abs(parsedVal - price.amount) < 0.05) {
+        return `💰 ₪${price.amount % 1 === 0 ? Math.floor(price.amount) : price.amount.toFixed(2)}`;
+      }
+      return m;
+    });
+    processed = processed.replace(/([\d.]+)\s*(?:ש"ח|₪|USD|ILS)/gi, (m, val) => {
+      const parsedVal = parseFloat(val);
+      if (!isNaN(parsedVal) && Math.abs(parsedVal - price.amount) < 0.05) {
+        return `₪${price.amount % 1 === 0 ? Math.floor(price.amount) : price.amount.toFixed(2)}`;
+      }
+      return m;
+    });
+  } else if (price.currency.toUpperCase() === 'USD') {
+    processed = processed.replace(/💰?\s*(?:USD|ILS|\$|ש"ח|₪)\s*([\d.]+)/gi, (m, val) => {
+      const parsedVal = parseFloat(val);
+      if (!isNaN(parsedVal) && Math.abs(parsedVal - price.amount) < 0.05) {
+        return `💰 $${price.amount.toFixed(2)}`;
+      }
+      return m;
+    });
+  }
+
+  return processed;
+}
+
 export class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
   private apiKey: string;
@@ -79,8 +140,8 @@ export class GeminiProvider implements AIProvider {
     const product = input.product;
     const productData = {
       title: product.title,
-      price: `${product.price.amount} ${product.price.currency}`,
-      originalPrice: product.originalPrice ? `${product.originalPrice.amount} ${product.originalPrice.currency}` : undefined,
+      price: formatPriceForAI(product.price.amount, product.price.currency),
+      originalPrice: product.originalPrice ? formatPriceForAI(product.originalPrice.amount, product.originalPrice.currency) : undefined,
       discount: product.discountPercent ? `${product.discountPercent}%` : undefined,
       rating: product.rating !== undefined ? String(product.rating) : undefined,
       sales: product.salesCount !== undefined ? String(product.salesCount) : undefined,
@@ -160,13 +221,15 @@ export class GeminiProvider implements AIProvider {
     try {
       const validated = validateGeminiResponse(parsed);
       
+      const processedPost = postProcessTelegramPost(validated.telegramPost, product.price, product.originalPrice);
+
       const post: GeneratedPost = {
         headline: validated.headline,
         body: validated.body,
         cta: validated.cta,
-        telegramPost: validated.telegramPost,
+        telegramPost: processedPost,
         affiliateUrl: product.affiliateUrl,
-        fullText: validated.telegramPost, // Maintain backward compatibility (holds telegramPost)
+        fullText: processedPost, // Maintain backward compatibility (holds telegramPost)
         title: validated.headline, // Optional backward compatibility
         hashtags: [], // Optional backward compatibility
       };

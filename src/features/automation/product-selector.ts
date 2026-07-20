@@ -1,9 +1,7 @@
 import { CatalogProduct } from '../products/types';
 import {
-  MAX_PRODUCT_PRICE_USD,
-  PREFERRED_PRICE_MIN_USD,
-  PREFERRED_PRICE_MAX_USD,
-  MID_PRICE_MAX_USD
+  PRICE_RULES_BY_CURRENCY,
+  SupportedCurrency
 } from './product-selection-config';
 import { productTypeRules } from './product-type-rules';
 
@@ -382,11 +380,18 @@ export const CLASSIFICATION_INVARIANTS: ClassificationInvariantRule[] = [
 
 export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
   const eligibleProducts = products.filter((product) => {
-    if (product.price && product.price.amount !== undefined && product.price.currency === 'USD') {
-      if (product.price.amount > MAX_PRODUCT_PRICE_USD) {
+    if (product.price && product.price.amount !== undefined) {
+      const currencyUpper = product.price.currency?.toUpperCase();
+      const isSupported = currencyUpper === 'USD' || currencyUpper === 'ILS';
+      if (!isSupported) {
+        return false;
+      }
+      const rules = PRICE_RULES_BY_CURRENCY[currencyUpper as SupportedCurrency];
+      if (product.price.amount > rules.max) {
         if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
+          const sym = currencyUpper === 'ILS' ? '₪' : '$';
           throw new Error(
-            `Invariant Violation: Product ${product.externalId} exceeds MAX_PRODUCT_PRICE_USD of ${MAX_PRODUCT_PRICE_USD} USD inside selectBestProduct`
+            `Invariant Violation: Product ${product.externalId} exceeds maximum price of ${sym}${rules.max} inside selectBestProduct`
           );
         }
         return false;
@@ -622,18 +627,25 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
     // I. Price Signal Score
     if (product.price && product.price.amount !== undefined) {
       const priceAmount = product.price.amount;
-      if (priceAmount < PREFERRED_PRICE_MIN_USD) {
-        score -= 15;
-        warnings.push(`Very low price may indicate a small item or component (${priceAmount} USD)`);
-      } else if (priceAmount >= PREFERRED_PRICE_MIN_USD && priceAmount <= PREFERRED_PRICE_MAX_USD) {
-        score += 10;
-        reasons.push(`Price is within the preferred 2–30 USD range (${priceAmount} USD)`);
-      } else if (priceAmount > PREFERRED_PRICE_MAX_USD && priceAmount <= MID_PRICE_MAX_USD) {
-        score += 5;
-        reasons.push(`Price is above the preferred range but below the 75 USD maximum (${priceAmount} USD)`);
-      } else if (priceAmount > MID_PRICE_MAX_USD && priceAmount <= MAX_PRODUCT_PRICE_USD) {
-        score -= 5;
-        warnings.push(`Higher price range (above 50 USD): ${priceAmount} USD`);
+      const currencyUpper = product.price.currency?.toUpperCase();
+      const isSupported = currencyUpper === 'USD' || currencyUpper === 'ILS';
+      if (isSupported) {
+        const rules = PRICE_RULES_BY_CURRENCY[currencyUpper as SupportedCurrency];
+        const sym = currencyUpper === 'ILS' ? '₪' : '$';
+        
+        if (priceAmount < rules.preferredMin) {
+          score -= 15;
+          warnings.push(`Very low price may indicate a small item or component (${sym}${priceAmount})`);
+        } else if (priceAmount >= rules.preferredMin && priceAmount <= rules.preferredMax) {
+          score += 10;
+          reasons.push(`Price is within the preferred ${rules.preferredMin}–${rules.preferredMax} USD/ILS range (${sym}${priceAmount})`);
+        } else if (priceAmount > rules.preferredMax && priceAmount <= rules.midMax) {
+          score += 5;
+          reasons.push(`Price is above the preferred range but below the ${rules.max} USD/ILS maximum (${sym}${priceAmount})`);
+        } else if (priceAmount > rules.midMax && priceAmount <= rules.max) {
+          score -= 5;
+          warnings.push(`Higher price range (above ${rules.midMax} USD/ILS): ${sym}${priceAmount}`);
+        }
       }
     }
 
@@ -718,12 +730,20 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
     if (hasTechnicalWarning) {
       selectionIneligibilityReasons.push('Technical module or installer warning exists');
     }
-    if (product.price && product.price.amount !== undefined && product.price.currency === 'USD') {
-      if (product.price.amount > MAX_PRODUCT_PRICE_USD) {
-        selectionIneligibilityReasons.push(`Price exceeds maximum allowed USD price of ${MAX_PRODUCT_PRICE_USD}`);
+    if (product.price && product.price.amount !== undefined) {
+      const currencyUpper = product.price.currency?.toUpperCase();
+      const isSupported = currencyUpper === 'USD' || currencyUpper === 'ILS';
+      if (!isSupported) {
+        selectionIneligibilityReasons.push(`Unsupported or unknown currency: "${product.price.currency || 'unknown'}"`);
+      } else {
+        const rules = PRICE_RULES_BY_CURRENCY[currencyUpper as SupportedCurrency];
+        if (product.price.amount > rules.max) {
+          const sym = currencyUpper === 'ILS' ? '₪' : '$';
+          selectionIneligibilityReasons.push(`Price ${sym}${product.price.amount} exceeds the ${currencyUpper} maximum of ${sym}${rules.max}`);
+        }
       }
     } else {
-      selectionIneligibilityReasons.push('Invalid price or non-USD currency');
+      selectionIneligibilityReasons.push('Invalid or missing price');
     }
 
     const selectionEligible = selectionIneligibilityReasons.length === 0;

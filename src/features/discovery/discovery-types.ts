@@ -6,6 +6,8 @@ export type KeywordDiscoveryStrategy = {
   pages: number;
   pageSize: number;
   sort?: string;
+  categoryId?: string;
+  strategyOrder?: number;
 };
 
 export type CategoryDiscoveryStrategy = {
@@ -15,6 +17,7 @@ export type CategoryDiscoveryStrategy = {
   pages: number;
   pageSize: number;
   sort?: string;
+  strategyOrder?: number;
 };
 
 export type DiscoveryStrategy = KeywordDiscoveryStrategy | CategoryDiscoveryStrategy;
@@ -35,6 +38,28 @@ export interface UniqueDiscoveredProduct {
   origins: DiscoveryOrigin[];
 }
 
+export interface DiscoveryCategory {
+  id: string;
+  displayName: string;
+  hebrewLabel: string;
+  emoji: string;
+  description: string;
+  weight: number;
+  enabled: boolean;
+  keywords: string[];
+  pages?: number;
+  pageSize?: number;
+  keywordsPerRun?: number;
+  tags?: string[];
+}
+
+export interface DiscoveryConfigV2 {
+  categories: DiscoveryCategory[];
+  categoriesPerRun: number;
+  defaultKeywordsPerCategory: number;
+}
+
 export interface DiscoveryConfig {
   strategies: DiscoveryStrategy[];
+  categories?: DiscoveryCategory[];
 }

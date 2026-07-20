@@ -132,12 +132,12 @@ async function runE2ETest() {
   console.log(`Unique Products after Deduplication: ${stats.uniqueProductsAfterDeduplication}`);
   console.log(`Eligible Products after Filtering: ${stats.eligibleProductsCount}`);
   console.log(`Rejected Products Count: ${stats.rejectedProductsCount}`);
-  console.log(`  - Price > 75 USD: ${rejectedAbove75}`);
-  console.log(`  - Non-USD or Unknown Currency: ${rejectedNonUsd}`);
-  console.log(`  - Eligible < 2 USD: ${eligibleBelow2}`);
-  console.log(`  - Eligible 2-30 USD (Preferred): ${eligible2to30}`);
-  console.log(`  - Eligible 30-50 USD: ${eligible30to50}`);
-  console.log(`  - Eligible 50-75 USD: ${eligible50to75}`);
+  console.log(`  - Price > 75 USD/ILS: ${rejectedAbove75}`);
+  console.log(`  - Non-USD/ILS or Unknown Currency: ${rejectedNonUsd}`);
+  console.log(`  - Eligible < 2 USD/ILS: ${eligibleBelow2}`);
+  console.log(`  - Eligible 2-30 USD/ILS (Preferred): ${eligible2to30}`);
+  console.log(`  - Eligible 30-50 USD/ILS: ${eligible30to50}`);
+  console.log(`  - Eligible 50-75 USD/ILS: ${eligible50to75}`);
 
   // 2. Print summary per strategy
   console.log('\n--- Summary Per Strategy ---');
@@ -200,7 +200,7 @@ async function runE2ETest() {
     console.log(`  - Price: ${selectedProduct.price.amount} ${selectedProduct.price.currency}`);
     console.log(`  - Price Band: ${priceBand}`);
     console.log(`  - Price Selection Reason: ${priceReason}`);
-    console.log(`  - Inside Preferred Range (2-30 USD): ${insidePreferred}`);
+    console.log(`  - Inside Preferred Range (2-30 USD/ILS): ${insidePreferred}`);
     console.log(`\nSelection reasons:`);
     selection.reasons.forEach((r) => console.log(`  - ${r}`));
     console.log(`\nWarnings:`);
