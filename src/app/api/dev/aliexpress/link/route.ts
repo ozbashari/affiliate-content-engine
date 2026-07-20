@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { generateAliExpressAffiliateLink, getAliExpressConfig, AliExpressClient } from '@/lib/aliexpress';
+import { generateAliExpressAffiliateLink } from '@/lib/aliexpress';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       sourceUrl: url,
       generatedAffiliateUrl,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
       {
         success: false,

@@ -1,6 +1,62 @@
 import { AIProvider } from './provider';
 import { GeneratePostInput, GeneratePostResult, GeneratedPost } from './types';
-import { loadPromptTemplate, fillPromptTemplate } from './prompt-loader';
+import { loadPromptTemplate } from './prompt-loader';
+
+/**
+ * Strips formatting fences and parses raw response text into a JSON value.
+ */
+export function cleanAndParseJSON(rawText: string): unknown {
+  let cleaned = rawText.trim();
+  
+  // Remove markdown code fence if present
+  if (cleaned.startsWith('```')) {
+    const match = cleaned.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    if (match) {
+      cleaned = match[1].trim();
+    }
+  }
+  
+  return JSON.parse(cleaned);
+}
+
+export interface GeminiJSONResponse {
+  headline: string;
+  body: string;
+  cta: string;
+  telegramPost: string;
+}
+
+/**
+ * Validates that the parsed response has the required fields and types.
+ */
+export function validateGeminiResponse(parsed: unknown): GeminiJSONResponse {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Response is not a JSON object.');
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const { headline, body, cta, telegramPost } = record;
+
+  if (typeof headline !== 'string') {
+    throw new Error('Field "headline" is missing or not a string.');
+  }
+  if (typeof body !== 'string') {
+    throw new Error('Field "body" is missing or not a string.');
+  }
+  if (typeof cta !== 'string') {
+    throw new Error('Field "cta" is missing or not a string.');
+  }
+  if (typeof telegramPost !== 'string' || telegramPost.trim() === '') {
+    throw new Error('Field "telegramPost" is missing, empty, or not a string.');
+  }
+
+  return {
+    headline: headline.trim(),
+    body: body.trim(),
+    cta: cta.trim(),
+    telegramPost: telegramPost.trim(),
+  };
+}
 
 export class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
@@ -17,13 +73,32 @@ export class GeminiProvider implements AIProvider {
       );
     }
 
-    const template = loadPromptTemplate('gemini-telegram-post.md');
-    const promptText = fillPromptTemplate(template, input.product);
+    const systemPrompt = loadPromptTemplate('gemini-system-prompt.md');
+    const templatePrompt = loadPromptTemplate('telegram-post-template.md');
 
-    // Prompt instructing structured JSON output matching schema
-    const userPrompt = `${promptText}\n\n` +
-      `Additional Instructions: ${input.additionalInstructions || 'None'}\n\n` +
-      `Generate the output as a JSON object with the following fields: 'title', 'body', 'hashtags' (array of strings), and 'cta'. Do not return any other text than the JSON object.`;
+    const product = input.product;
+    const productData = {
+      title: product.title,
+      price: `${product.price.amount} ${product.price.currency}`,
+      originalPrice: product.originalPrice ? `${product.originalPrice.amount} ${product.originalPrice.currency}` : undefined,
+      discount: product.discountPercent ? `${product.discountPercent}%` : undefined,
+      rating: product.rating !== undefined ? String(product.rating) : undefined,
+      sales: product.salesCount !== undefined ? String(product.salesCount) : undefined,
+      imageUrl: product.imageUrl,
+      productUrl: product.productUrl,
+      affiliateUrl: product.affiliateUrl,
+      description: product.description,
+    };
+
+    // Filter out missing/empty values to keep JSON payload minimal
+    const cleanedProductData = Object.fromEntries(
+      Object.entries(productData).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    );
+
+    const productJsonString = JSON.stringify(cleanedProductData, null, 2);
+
+    // Concatenate according to required order: System Prompt + Telegram Template + Product JSON
+    const userPrompt = `${systemPrompt}\n\n${templatePrompt}\n\nInput Product JSON:\n${productJsonString}`;
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${this.apiKey}`;
 
@@ -42,16 +117,12 @@ export class GeminiProvider implements AIProvider {
         responseSchema: {
           type: 'OBJECT',
           properties: {
-            title: { type: 'STRING', description: 'A short, engaging title/headline in Hebrew with relevant emojis' },
-            body: { type: 'STRING', description: 'The main promotional body text in Hebrew highlighting benefits, specs, original price, discount, and sale price' },
-            hashtags: {
-              type: 'ARRAY',
-              items: { type: 'STRING' },
-              description: 'A list of relevant hashtags (e.g., ["סמארטפון", "דיל"])'
-            },
-            cta: { type: 'STRING', description: 'A strong call-to-action in Hebrew, encouraging purchase' }
+            headline: { type: 'STRING', description: 'Headline of the post' },
+            body: { type: 'STRING', description: 'Body content of the post' },
+            cta: { type: 'STRING', description: 'Call to action text' },
+            telegramPost: { type: 'STRING', description: 'The complete generated Telegram post exactly as it should be published' }
           },
-          required: ['title', 'body', 'hashtags', 'cta']
+          required: ['headline', 'body', 'cta', 'telegramPost']
         }
       }
     };
@@ -77,37 +148,37 @@ export class GeminiProvider implements AIProvider {
       throw new Error('Gemini API did not return any content.');
     }
 
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(candidateText.trim());
+      parsed = cleanAndParseJSON(candidateText);
+    } catch (parseError: unknown) {
+      console.error('Raw Gemini Response:', candidateText);
+      const parseMessage = parseError instanceof Error ? parseError.message : String(parseError);
+      throw new Error(`Failed to parse Gemini response as JSON: ${parseMessage}`);
+    }
+
+    try {
+      const validated = validateGeminiResponse(parsed);
       
-      const title = String(parsed.title || '').trim();
-      const body = String(parsed.body || '').trim();
-      const rawHashtags = Array.isArray(parsed.hashtags) ? parsed.hashtags : [];
-      const hashtags = rawHashtags.map((tag: any) => {
-        const strTag = String(tag).trim();
-        return strTag.startsWith('#') ? strTag : `#${strTag}`;
-      });
-      const cta = String(parsed.cta || '').trim();
-      const affiliateUrl = input.product.affiliateUrl;
-
-      // Construct a clean fullText post
-      const fullText = `${title}\n\n${body}\n\n${cta}\n\n${hashtags.join(' ')}\n\n${affiliateUrl}`;
-
       const post: GeneratedPost = {
-        title,
-        body,
-        hashtags,
-        cta,
-        affiliateUrl,
-        fullText,
+        headline: validated.headline,
+        body: validated.body,
+        cta: validated.cta,
+        telegramPost: validated.telegramPost,
+        affiliateUrl: product.affiliateUrl,
+        fullText: validated.telegramPost, // Maintain backward compatibility (holds telegramPost)
+        title: validated.headline, // Optional backward compatibility
+        hashtags: [], // Optional backward compatibility
       };
 
       return {
         post,
         generatedAt: new Date(),
       };
-    } catch (parseError) {
-      throw new Error(`Failed to parse structured JSON response from Gemini: ${parseError instanceof Error ? parseError.message : String(parseError)}. Raw text: ${candidateText}`);
+    } catch (validationError: unknown) {
+      console.error('Raw Gemini Response:', candidateText);
+      const valMessage = validationError instanceof Error ? validationError.message : String(validationError);
+      throw new Error(`Invalid Gemini response format: ${valMessage}`);
     }
   }
 }

@@ -91,6 +91,17 @@ export async function runAutomationPipeline(input: AutomationPipelineInput): Pro
     }
 
     // Step 5: Publish to Telegram
+    if (input.dryRun) {
+      console.log('Dry run enabled. Skipping Telegram publication and database saving.');
+      return {
+        success: true,
+        publishType: 'photo',
+        telegramMessageId: 'mock-dry-run-message-id',
+        generatedPost: finalPost,
+        alreadyPublished: false,
+      };
+    }
+
     const publisher = new TelegramPublisher();
     const publishResult = await publisher.publish({
       post: finalPost,

@@ -10,7 +10,7 @@ export function ProductGrid({ products }: ProductGridProps) {
     return (
       <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50 text-gray-500">
         <p className="text-lg font-medium mb-1">No products found</p>
-        <p className="text-sm">Click "Scan Products" to retrieve items from AliExpress.</p>
+        <p className="text-sm">{'Click "Scan Products" to retrieve items from AliExpress.'}</p>
       </div>
     );
   }

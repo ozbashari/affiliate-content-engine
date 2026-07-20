@@ -4,6 +4,7 @@ import { GeneratedPost } from '@/features/ai/types';
 export interface AutomationPipelineInput {
   product: CatalogProduct;
   generatedPost?: GeneratedPost;
+  dryRun?: boolean;
 }
 
 export interface AutomationPipelineResult {

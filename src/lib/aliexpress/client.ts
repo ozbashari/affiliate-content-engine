@@ -2,7 +2,19 @@ import { AliExpressConfig, getAliExpressConfig } from './config';
 import { signRequest } from './signer';
 
 export interface AliExpressRequestParams {
-  [key: string]: string | number | boolean;
+  [key: string]: string | number | boolean | undefined;
+}
+
+export interface AliExpressProductQueryParams extends AliExpressRequestParams {
+  category_ids?: string;
+  keywords?: string;
+  page_no?: string | number;
+  page_size?: string | number;
+  sort?: string;
+  target_currency?: string;
+  target_language?: string;
+  ship_to_country?: string;
+  tracking_id?: string;
 }
 
 export function formatTimestamp(date: Date = new Date()): string {
@@ -14,6 +26,18 @@ export function formatTimestamp(date: Date = new Date()): string {
   const minutes = pad(date.getUTCMinutes());
   const seconds = pad(date.getUTCSeconds());
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+export class AliExpressHTTPError extends Error {
+  status: number;
+  statusText: string;
+
+  constructor(status: number, statusText: string) {
+    super(`AliExpress API HTTP error: ${status} ${statusText}`);
+    this.status = status;
+    this.statusText = statusText;
+    this.name = 'AliExpressHTTPError';
+  }
 }
 
 export class AliExpressClient {
@@ -49,7 +73,7 @@ export class AliExpressClient {
           apiUrl: this.config.apiUrl,
         },
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         status: 'error',
         message: error instanceof Error ? error.message : String(error),
@@ -78,7 +102,12 @@ export class AliExpressClient {
       timestamp: formatTimestamp(new Date()),
     };
 
-    const allParams = { ...systemParams, ...methodParams };
+    const allParams: Record<string, string | number | boolean> = {};
+    for (const [key, val] of Object.entries({ ...systemParams, ...methodParams })) {
+      if (val !== undefined && val !== null) {
+        allParams[key] = val;
+      }
+    }
 
     // Generate signature
     const signature = signRequest(allParams, config.appSecret);
@@ -92,19 +121,36 @@ export class AliExpressClient {
 
     const url = config.apiUrl;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
-      },
-      body: searchParams.toString(),
-    });
+    const timeoutSecondsStr = process.env.ALIEXPRESS_REQUEST_TIMEOUT_SECONDS;
+    const timeoutSeconds = timeoutSecondsStr ? parseInt(timeoutSecondsStr, 10) : 30;
+    const timeoutMs = (isNaN(timeoutSeconds) || timeoutSeconds <= 0 ? 30 : timeoutSeconds) * 1000;
 
-    if (!response.ok) {
-      throw new Error(`AliExpress API HTTP error: ${response.status} ${response.statusText}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+        },
+        body: searchParams.toString(),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new AliExpressHTTPError(response.status, response.statusText);
+      }
+
+      const data = await response.json();
+      return data as T;
+    } catch (error: unknown) {
+      clearTimeout(timeoutId);
+      throw error;
     }
-
-    const data = await response.json();
-    return data as T;
   }
 }

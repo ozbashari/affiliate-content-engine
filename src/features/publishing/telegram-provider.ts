@@ -15,6 +15,40 @@ interface TelegramSuccessResponse {
   result: TelegramMessageResult;
 }
 
+export function validateAffiliateUrlInPost(fullText: string, affiliateUrl: string): { valid: boolean; error?: string } {
+  const trimmedText = fullText.trim();
+  const trimmedUrl = affiliateUrl.trim();
+
+  // 1. Must contain the exact affiliate URL
+  if (!trimmedText.includes(trimmedUrl)) {
+    return {
+      valid: false,
+      error: `Affiliate URL validation failed: Post does not contain the affiliate URL "${trimmedUrl}".`,
+    };
+  }
+
+  // 2. The affiliate URL must appear exactly once
+  const occurrences = trimmedText.split(trimmedUrl).length - 1;
+  if (occurrences !== 1) {
+    return {
+      valid: false,
+      error: `Affiliate URL validation failed: The affiliate URL appears ${occurrences} times instead of exactly once.`,
+    };
+  }
+
+  // 3. The final non-empty line must equal the affiliate URL
+  const lines = trimmedText.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
+  const lastLine = lines[lines.length - 1] || '';
+  if (lastLine !== trimmedUrl) {
+    return {
+      valid: false,
+      error: `Affiliate URL validation failed: The final non-empty line of the post ("${lastLine}") does not equal the affiliate URL ("${trimmedUrl}").`,
+    };
+  }
+
+  return { valid: true };
+}
+
 export class TelegramPublisher {
   private botToken: string;
   private channelId: string;
@@ -72,6 +106,13 @@ export class TelegramPublisher {
     }
     if (!input.post.affiliateUrl.trim()) {
       return { success: false, error: 'Publishing error: post.affiliateUrl is empty' };
+    }
+
+    // Validate affiliate URL in post text
+    const urlValidation = validateAffiliateUrlInPost(input.post.fullText, input.post.affiliateUrl);
+    if (!urlValidation.valid) {
+      console.error(urlValidation.error);
+      return { success: false, error: urlValidation.error };
     }
 
     const inlineKeyboard = {

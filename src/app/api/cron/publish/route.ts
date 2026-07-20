@@ -1,7 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import crypto from 'crypto';
-import { scanUnpublishedProducts, runAutomationPipeline } from '@/features/automation';
-import { CatalogProduct } from '@/features/products/types';
+import { runScheduledProductDiscovery } from '@/features/discovery';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,82 +49,68 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 2. Read category ID and page size from environment.
-    const categoryId = process.env.AUTOMATION_CATEGORY_ID || '44';
-    const pageSizeStr = process.env.AUTOMATION_PAGE_SIZE || '20';
-    const pageSize = parseInt(pageSizeStr, 10) || 20;
+    // 2. Call the scheduled product discovery workflow
+    const result = await runScheduledProductDiscovery();
 
-    // 3. Call scanUnpublishedProducts.
-    let unpublishedProducts: CatalogProduct[];
-    try {
-      unpublishedProducts = await scanUnpublishedProducts({ categoryId, pageSize });
-    } catch (scanError: unknown) {
-      const scanErrorMessage = scanError instanceof Error ? scanError.message : String(scanError);
+    if (!result.success) {
       return NextResponse.json(
         {
           success: false,
-          code: 'PRODUCT_SCAN_FAILED',
-          error: `Product scan failed: ${scanErrorMessage}`,
+          code: result.code,
+          error: result.message,
         },
         { status: 500 }
       );
     }
 
-    // 4. If no unpublished products are available.
-    if (unpublishedProducts.length === 0) {
+    if (result.status === 'no-products') {
       return NextResponse.json({
         success: true,
-        status: 'no-products',
-        code: 'NO_UNPUBLISHED_PRODUCTS',
-        message: 'No unpublished products were found.',
+        status: result.status,
+        code: result.code,
+        message: result.message,
       });
     }
 
-    // 5. Select exactly one product.
-    const product = unpublishedProducts[0];
-
-    // 6. Run the automation pipeline.
-    const result = await runAutomationPipeline({ product });
-
-    // 7. Handle duplicate / concurrency skipped cases.
-    if (result.alreadyPublished || result.errorCode === 'DUPLICATE_RECORD_AFTER_PUBLISH') {
+    const pResult = result.pipelineResult;
+    // Handle skipped concurrency or other statuses
+    if (pResult && (pResult.alreadyPublished || pResult.errorCode === 'DUPLICATE_RECORD_AFTER_PUBLISH')) {
       return NextResponse.json(
         {
           success: false,
-          code: result.errorCode || 'PRODUCT_ALREADY_PUBLISHED',
+          code: pResult.errorCode || 'PRODUCT_ALREADY_PUBLISHED',
           status: 'skipped',
           message: 'The selected product was already published by a concurrent request.',
-          productExternalId: product.externalId,
-          productTitle: product.title,
-          telegramMessageId: result.telegramMessageId,
+          productExternalId: result.selectedProduct?.externalId,
+          productTitle: result.selectedProduct?.title,
+          telegramMessageId: pResult.telegramMessageId,
         },
         { status: 409 }
       );
     }
 
-    // 8. Handle other failures.
-    if (!result.success) {
+    if (pResult && !pResult.success) {
       return NextResponse.json(
         {
           success: false,
           code: 'AUTOMATION_PIPELINE_FAILED',
-          error: result.errorMessage || 'Automation pipeline execution failed.',
-          productExternalId: product.externalId,
-          productTitle: product.title,
+          error: pResult.errorMessage || 'Automation pipeline execution failed.',
+          productExternalId: result.selectedProduct?.externalId,
+          productTitle: result.selectedProduct?.title,
         },
         { status: 500 }
       );
     }
 
-    // 9. Success response.
     return NextResponse.json({
       success: true,
       status: 'published',
-      productExternalId: product.externalId,
-      productTitle: product.title,
-      telegramMessageId: result.telegramMessageId,
-      publishType: result.publishType,
+      productExternalId: result.selectedProduct?.externalId,
+      productTitle: result.selectedProduct?.title,
+      telegramMessageId: pResult?.telegramMessageId,
+      publishType: pResult?.publishType,
     });
+
   } catch (error: unknown) {
     return NextResponse.json(
       {

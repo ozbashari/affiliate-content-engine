@@ -26,6 +26,7 @@ export interface CatalogProduct {
   createdAt: Date;
   updatedAt: Date;
   publishedAt?: Date;
+  origins?: unknown[];
 }
 
 export type CreateCatalogProductInput = Omit<

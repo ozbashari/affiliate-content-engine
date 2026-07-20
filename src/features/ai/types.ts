@@ -1,12 +1,14 @@
 import { CatalogProduct } from '@/features/products/types';
 
 export interface GeneratedPost {
-  title: string;
+  headline: string;
   body: string;
-  hashtags: string[];
   cta: string;
+  telegramPost: string;
   affiliateUrl: string;
-  fullText: string;
+  fullText: string; // Maintain backward compatibility with fullText (holds telegramPost)
+  title?: string; // Optional backward compatibility
+  hashtags?: string[]; // Optional backward compatibility
 }
 
 export interface GeneratePostInput {

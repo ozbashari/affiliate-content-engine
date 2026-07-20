@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     // Extract products
     const rawProducts = response?.aliexpress_affiliate_product_query_response?.resp_result?.result?.products?.product;
     
-    let allScannedProducts: CatalogProduct[] = [];
+    const allScannedProducts: CatalogProduct[] = [];
     let mappingFailedCount = 0;
 
     if (rawProducts) {
