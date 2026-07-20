@@ -62,7 +62,7 @@ export async function scanUnpublishedProducts(input: {
     category_ids: input.categoryId,
     page_size: input.pageSize,
     page_no: '1',
-    target_currency: 'USD',
+    target_currency: 'ILS',
     target_language: 'EN',
     fields,
     tracking_id: config.trackingId,

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const categoryIds = searchParams.get('category_ids') || '509';
     const pageSize = searchParams.get('page_size') || '10';
     const pageNo = searchParams.get('page_no') || '1';
-    const targetCurrency = searchParams.get('target_currency') || 'USD';
+    const targetCurrency = searchParams.get('target_currency') || 'ILS';
     const targetLanguage = searchParams.get('target_language') || 'EN';
 
     const fields = 'product_id,product_title,sale_price,original_price,discount,product_main_image_url,commission_rate,evaluate_rate,product_detail_url,lastest_volume';

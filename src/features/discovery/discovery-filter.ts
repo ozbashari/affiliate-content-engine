@@ -1,4 +1,4 @@
-import { MAX_PRODUCT_PRICE_USD } from '../automation/product-selection-config';
+import { PRICE_RULES_BY_CURRENCY, SupportedCurrency } from '../automation/product-selection-config';
 import { UniqueDiscoveredProduct } from './discovery-types';
 
 export interface FilteringResult {
@@ -35,10 +35,18 @@ export function filterProducts(uniqueProducts: UniqueDiscoveredProduct[]): Filte
       reasons.push('Missing or invalid sale price');
     } else if (p.price.amount <= 0) {
       reasons.push('Missing or invalid sale price');
-    } else if (!p.price.currency || p.price.currency.toUpperCase() !== 'USD') {
-      reasons.push(`Unsupported or unknown currency for USD price filtering: "${p.price.currency || 'unknown'}"`);
-    } else if (p.price.amount > MAX_PRODUCT_PRICE_USD) {
-      reasons.push(`Current price exceeds maximum allowed price of ${MAX_PRODUCT_PRICE_USD} USD`);
+    } else {
+      const currencyUpper = p.price.currency?.toUpperCase();
+      const isSupported = currencyUpper === 'USD' || currencyUpper === 'ILS';
+      if (!p.price.currency || !isSupported) {
+        reasons.push(`Unsupported or unknown currency: "${p.price.currency || 'unknown'}"`);
+      } else {
+        const rules = PRICE_RULES_BY_CURRENCY[currencyUpper as SupportedCurrency];
+        if (p.price.amount > rules.max) {
+          const sym = currencyUpper === 'ILS' ? '₪' : '$';
+          reasons.push(`Price ${sym}${p.price.amount} exceeds the ${currencyUpper} maximum of ${sym}${rules.max}`);
+        }
+      }
     }
 
     // 4. Validate imageUrl

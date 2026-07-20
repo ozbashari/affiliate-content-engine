@@ -7,6 +7,11 @@ export interface Money {
   currency: string;
 }
 
+export interface ProductDiscoveryContext {
+  categoryId: string;
+  keyword: string;
+}
+
 export interface CatalogProduct {
   id: string;
   source: ProductSource;
@@ -27,6 +32,8 @@ export interface CatalogProduct {
   updatedAt: Date;
   publishedAt?: Date;
   origins?: unknown[];
+  discoveryContexts?: ProductDiscoveryContext[];
+  primaryDiscoveryContext?: ProductDiscoveryContext;
 }
 
 export type CreateCatalogProductInput = Omit<

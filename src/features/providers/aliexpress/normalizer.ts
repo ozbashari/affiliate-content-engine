@@ -65,8 +65,8 @@ export function normalizeAliExpressProduct(raw: Record<string, unknown>): Normal
   const salesCount = normalizeNumber(raw.lastest_volume);
   const commissionRate = normalizeNumber(raw.commission_rate);
 
-  // Handle target_currency or default to USD
-  const currency = normalizeString(raw.target_currency) || 'USD';
+  // Handle target_currency or default to ILS
+  const currency = normalizeString(raw.target_currency) || 'ILS';
 
   if (!externalId) {
     throw new Error('Normalization failed: product_id is missing or invalid.');

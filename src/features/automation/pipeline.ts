@@ -126,6 +126,20 @@ export async function runAutomationPipeline(input: AutomationPipelineInput): Pro
         externalId,
         telegramMessageId,
       });
+
+      if (product.primaryDiscoveryContext) {
+        try {
+          const { SupabaseDiversityRepository } = await import('../discovery/diversity-repository');
+          const repo = new SupabaseDiversityRepository();
+          await repo.savePublishedDiversity(
+            externalId,
+            product.primaryDiscoveryContext.categoryId,
+            product.primaryDiscoveryContext.keyword
+          );
+        } catch (divError: unknown) {
+          console.warn('Failed to save published diversity record:', divError);
+        }
+      }
     } catch (dbError: unknown) {
       if (dbError instanceof UniqueConstraintViolationError) {
         return {

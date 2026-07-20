@@ -84,7 +84,7 @@ export class DiscoveryService {
           const apiParams: Record<string, string | number | boolean | undefined> = {
             page_no: page,
             page_size: strategy.pageSize,
-            target_currency: 'USD',
+            target_currency: 'ILS',
             target_language: 'EN',
             fields,
             tracking_id: config.trackingId,
@@ -130,6 +130,12 @@ export class DiscoveryService {
           for (const rawItem of list) {
             try {
               const catalogProduct = mapToCatalogProduct(rawItem);
+              if (strategy.categoryId) {
+                catalogProduct.discoveryContexts = [{
+                  categoryId: strategy.categoryId,
+                  keyword: strategy.type === 'keyword' ? strategy.keyword : '',
+                }];
+              }
               discoveredProducts.push({
                 product: catalogProduct,
                 discovery: {
@@ -149,11 +155,17 @@ export class DiscoveryService {
                 imageUrl: String(rawItem?.product_main_image_url || ''),
                 productUrl: String(rawItem?.product_detail_url || ''),
                 affiliateUrl: String(rawItem?.promotion_link || ''),
-                price: { amount: 0, currency: 'USD' },
+                price: { amount: 0, currency: 'ILS' },
                 status: 'draft',
                 createdAt: new Date(),
                 updatedAt: new Date()
               };
+              if (strategy.categoryId) {
+                mockProduct.discoveryContexts = [{
+                  categoryId: strategy.categoryId,
+                  keyword: strategy.type === 'keyword' ? strategy.keyword : '',
+                }];
+              }
               discoveredProducts.push({
                 product: mockProduct,
                 discovery: {
