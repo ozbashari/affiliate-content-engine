@@ -5,7 +5,8 @@
 This template defines the JSON formatting rules for transforming product data into a publication-ready Telegram post.
 
 ### Output JSON Format
-Return ONLY valid JSON. Do not wrap the JSON in markdown code blocks or add text outside the object structure.
+Return ONLY valid JSON. Do not wrap the JSON in markdown code blocks or add text outside the object structure. All text fields MUST be plain text only, containing NO HTML tags or Markdown formatting (like `<b>`, `<s>`, `*`, `_`, or backticks). The application code is solely responsible for adding the final styling to the Telegram message.
+
 ```json
 {
   "headline": "",

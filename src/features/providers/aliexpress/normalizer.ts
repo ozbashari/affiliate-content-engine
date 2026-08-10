@@ -61,7 +61,12 @@ export function normalizeAliExpressProduct(raw: Record<string, unknown>): Normal
   // AliExpress return discount in formats like "15%" or "15" or number 15
   const discountPercent = normalizeNumber(raw.discount);
 
-  const rating = normalizeNumber(raw.evaluate_rate);
+  let rating = normalizeNumber(raw.evaluate_rate);
+  if (rating !== undefined) {
+    if (rating <= 5.0) {
+      rating = rating * 20;
+    }
+  }
   const salesCount = normalizeNumber(raw.lastest_volume);
   const commissionRate = normalizeNumber(raw.commission_rate);
 

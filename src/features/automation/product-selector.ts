@@ -43,6 +43,13 @@ export interface SelectionResult {
   rankedProducts?: ScoredProductDetails[];
 }
 
+const MODIFIERS = [
+  'mini', 'portable', 'wireless', 'cordless', 'sliding', 'under', 'closet', 
+  'dog', 'cat', 'car', 'diy', 'home', 'travel', 'outdoor', 'rechargeable', 
+  'magnetic', 'silicone', 'plastic', 'wooden', 'metal', 'electric', 'manual',
+  'empty'
+];
+
 export const KEYWORD_CONCEPTS: Record<string, { core: string[][]; terms: string[] }> = {
   'vegetable chopper': {
     core: [
@@ -148,6 +155,7 @@ export function computeKeywordRelevance(title: string, keyword: string) {
   const missingCoreTerms: string[] = [];
 
   const keyConfig = KEYWORD_CONCEPTS[kwLower];
+  let coreWords: string[] = [];
   if (keyConfig) {
     keyConfig.core.forEach((group) => {
       const match = group.find(word => titleLower.includes(word));
@@ -163,10 +171,16 @@ export function computeKeywordRelevance(title: string, keyword: string) {
         matchedTerms.push(word);
       }
     });
+
+    // Extract matched core words for proximity check
+    coreWords = keyConfig.core.map(group => group.find(word => titleLower.includes(word))).filter(Boolean) as string[];
   } else {
-    // Fallback: split keyword into individual words
-    const words = kwLower.split(/\s+/).filter(w => w.length > 2);
-    words.forEach(word => {
+    // Fallback core words: filter out modifiers
+    coreWords = kwLower.split(/\s+/).filter(w => w.length > 2 && !MODIFIERS.includes(w));
+    if (coreWords.length === 0) {
+      coreWords = kwLower.split(/\s+/).filter(w => w.length > 2);
+    }
+    coreWords.forEach(word => {
       if (titleLower.includes(word)) {
         matchedTerms.push(word);
       } else {
@@ -175,10 +189,19 @@ export function computeKeywordRelevance(title: string, keyword: string) {
     });
   }
 
+  const hasCoreMatch = missingCoreTerms.length === 0;
+  let isEarlyMatch = false;
+  if (hasCoreMatch && coreWords.length > 0) {
+    const idx = titleLower.indexOf(coreWords[0]);
+    if (idx !== -1 && idx < 60) {
+      isEarlyMatch = true;
+    }
+  }
+
   let relevanceLevel: 'high' | 'medium' | 'low' = 'low';
   if (keyConfig) {
     if (missingCoreTerms.length === 0) {
-      relevanceLevel = 'high';
+      relevanceLevel = isEarlyMatch ? 'high' : 'medium';
     } else if (matchedTerms.length > 0) {
       relevanceLevel = 'medium';
     } else {
@@ -187,7 +210,7 @@ export function computeKeywordRelevance(title: string, keyword: string) {
   } else {
     const totalWords = kwLower.split(/\s+/).filter(w => w.length > 2).length;
     if (missingCoreTerms.length === 0) {
-      relevanceLevel = 'high';
+      relevanceLevel = isEarlyMatch ? 'high' : 'medium';
     } else if (matchedTerms.length >= Math.ceil(totalWords / 2)) {
       relevanceLevel = 'medium';
     } else {
@@ -459,35 +482,13 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
     }
 
     let relevanceAdjustment = 0;
-    if (relevanceLevel === 'high') {
-      relevanceAdjustment = 50;
-      score += 50;
-      reasons.push('High keyword relevance match');
-    } else if (relevanceLevel === 'medium') {
-      relevanceAdjustment = 10;
-      score += 10;
-      reasons.push(`Medium keyword relevance match: missing [${missingCoreTerms.join(', ')}]`);
-    } else {
-      relevanceAdjustment = 0;
-      warnings.push(`Low keyword relevance match: missing [${missingCoreTerms.join(', ')}]`);
-    }
+    let readinessAdjustment = 0;
 
     // B. Consumer Readiness Layer
     const readiness = computeConsumerReadiness(product.title);
     let consumerReadinessLevel = readiness.level;
     const consumerReadinessReasons = readiness.reasons;
     const consumerReadinessWarnings = readiness.warnings;
-
-    let readinessAdjustment = 0;
-    if (consumerReadinessLevel === 'high') {
-      readinessAdjustment = 50;
-      score += 50;
-      reasons.push(...consumerReadinessReasons);
-    } else if (consumerReadinessLevel === 'low') {
-      readinessAdjustment = -150;
-      score -= 150;
-      warnings.push(...consumerReadinessWarnings);
-    }
 
     // C. Product Type Validation (independent scoring concept with strict precedence rules)
     let inferredProductType = 'unknown';
@@ -523,17 +524,14 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
       if (matchedReplacementTerms.length > 0) {
         productTypeValidity = 'replacement';
         inferredProductType = matchedReplacementTerms[0];
-        score -= 100;
         warnings.push(`Replacement component or part detected: ${inferredProductType}`);
       } else if (matchedConflictingTerms.length > 0) {
         productTypeValidity = 'conflicting';
         inferredProductType = matchedConflictingTerms[0];
-        score -= 150;
         warnings.push(`Conflicting product type detected for intent "${discoveryKeyword}": ${inferredProductType}`);
       } else if (matchedAccessoryTerms.length > 0) {
         productTypeValidity = 'accessory';
         inferredProductType = matchedAccessoryTerms[0];
-        score -= 50;
         warnings.push(`Accessory type detected: ${inferredProductType}`);
       } else if (matchedPositiveTerms.length > 0) {
         productTypeValidity = 'valid';
@@ -553,13 +551,9 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
     if (rule && productTypeValidity === 'unregulated') {
       if (consumerReadinessLevel === 'high') {
         consumerReadinessLevel = 'medium';
-        readinessAdjustment = 0;
-        score -= 50; // Revert readiness bonus
       }
       if (relevanceLevel === 'high') {
         relevanceLevel = 'medium';
-        relevanceAdjustment = 10;
-        score -= 40; // Revert relevance bonus
       }
     }
 
@@ -567,16 +561,51 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
     if (discoveryKeyword && discoveryKeyword.toLowerCase() === 'car phone holder') {
       if (productTypeValidity === 'accessory' && relevanceLevel === 'high') {
         relevanceLevel = 'medium';
-        relevanceAdjustment = 10;
-        score -= 40; 
       } else if (productTypeValidity === 'replacement' && relevanceLevel === 'high') {
         relevanceLevel = 'low';
-        relevanceAdjustment = 0;
-        score -= 50;
       }
     }
 
-    // F. Decorative and Low-Value Relevance check
+    // F. Hierarchical Base Score computation (precedence tiers)
+    let baseScore = 0;
+    if (consumerReadinessLevel === 'high') {
+      if (relevanceLevel === 'high') {
+        baseScore = 200;
+        relevanceAdjustment = 50;
+        readinessAdjustment = 50;
+        reasons.push('Tier 1: High core-intent relevance match and high consumer readiness');
+      } else if (relevanceLevel === 'medium') {
+        baseScore = 100;
+        relevanceAdjustment = 10;
+        readinessAdjustment = 50;
+        reasons.push(`Tier 2: Medium relevance match: missing [${missingCoreTerms.join(', ')}]`);
+      } else {
+        baseScore = 0;
+        relevanceAdjustment = 0;
+        readinessAdjustment = 50;
+        warnings.push(`Tier 3: Low relevance match: missing [${missingCoreTerms.join(', ')}]`);
+      }
+    } else if (consumerReadinessLevel === 'medium') {
+      baseScore = 50;
+      relevanceAdjustment = relevanceLevel === 'high' ? 50 : (relevanceLevel === 'medium' ? 10 : 0);
+      readinessAdjustment = 0;
+      reasons.push('Tier 2.5: Medium consumer readiness');
+    } else {
+      baseScore = 0;
+      relevanceAdjustment = relevanceLevel === 'high' ? 50 : (relevanceLevel === 'medium' ? 10 : 0);
+      readinessAdjustment = -150;
+      warnings.push('Tier 3: Low consumer readiness');
+    }
+    score = baseScore;
+
+    // G. Independent Modifiers & Penalties
+
+    // Product Type Accessory demotion
+    if (productTypeValidity === 'accessory') {
+      score -= 50;
+    }
+
+    // Decorative and Low-Value Relevance check
     const decorativeKeywords = ['pendant', 'charm', 'organizer', 'ornament', 'jewelry', 'sticker', 'decorative accessory', 'keychain'];
     const functionalIntents = ['car phone holder', 'car vacuum cleaner', 'smart plug', 'sink organizer'];
     const matchedDecorative = decorativeKeywords.filter(term => titleLower.includes(term));
@@ -587,7 +616,7 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
       warnings.push(`Decorative product weakly satisfies functional intent "${discoveryKeyword}": matched "${matchedDecorative.join(', ')}"`);
     }
 
-    // G. Completeness & Niche Warnings
+    // Completeness & Niche Warnings
     const miniatureTerms = ['dollhouse', 'dolls house', 'miniature', '1/12', '1:12', 'pretend play', 'simulation model', 'toy accessory'];
     const characterTerms = ['anime', 'cosplay', 'pokémon', 'pokemon', 'sanrio', 'kuromi', 'one piece', 'character merchandise'];
     const partTerms = ['replacement', 'spare', 'component', 'handle only', 'accessory only', 'knob', 'screw', 'clamp', 'cover only'];
@@ -618,13 +647,22 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
       warnings.push(...completenessWarnings);
     }
 
-    // H. Broad usefulness bonus
-    if (relevanceLevel === 'high' && consumerReadinessLevel === 'high' && completenessWarnings.length === 0 && productTypeValidity === 'valid') {
-      score += 5;
-      reasons.push('Broad usefulness or curiosity potential');
+    // Commodity Demotion (-40)
+    const commodityTerms = ['microfiber', 'cloth', 'glue', 'gel pen', 'clothespin', 'peg', 'sponge'];
+    if (commodityTerms.some(t => titleLower.includes(t))) {
+      score -= 40;
+      warnings.push('Commodity product penalty applied');
     }
 
-    // I. Price Signal Score
+    // Brand Power
+    const trustedBrands = ['ugreen', 'baseus', 'anker', 'xiaomi', 'lenovo', 'sandisk', 'soundpeats'];
+    const foundBrand = trustedBrands.find((b) => titleLower.includes(b));
+    if (foundBrand) {
+      score += 3;
+      reasons.push(`Recognizable trusted brand found: ${foundBrand.toUpperCase()}`);
+    }
+
+    // H. Unified Price Scoring
     if (product.price && product.price.amount !== undefined) {
       const priceAmount = product.price.amount;
       const currencyUpper = product.price.currency?.toUpperCase();
@@ -633,12 +671,22 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
         const rules = PRICE_RULES_BY_CURRENCY[currencyUpper as SupportedCurrency];
         const sym = currencyUpper === 'ILS' ? '₪' : '$';
         
+        // Sweet spot pricing (15 to 60 ILS or 4 to 15 USD)
+        const sweetMin = currencyUpper === 'ILS' ? 15 : 4;
+        const sweetMax = currencyUpper === 'ILS' ? 60 : 15;
+        
         if (priceAmount < rules.preferredMin) {
           score -= 15;
           warnings.push(`Very low price may indicate a small item or component (${sym}${priceAmount})`);
         } else if (priceAmount >= rules.preferredMin && priceAmount <= rules.preferredMax) {
-          score += 10;
           reasons.push(`Price is within the preferred ${rules.preferredMin}–${rules.preferredMax} USD/ILS range (${sym}${priceAmount})`);
+          if (priceAmount >= sweetMin && priceAmount <= sweetMax) {
+            score += 15;
+            reasons.push('Price is within the sweet spot range');
+          } else {
+            const isLowerPref = priceAmount >= rules.preferredMin && priceAmount < sweetMin;
+            score += isLowerPref ? 5 : 10;
+          }
         } else if (priceAmount > rules.preferredMax && priceAmount <= rules.midMax) {
           score += 5;
           reasons.push(`Price is above the preferred range but below the ${rules.max} USD/ILS maximum (${sym}${priceAmount})`);
@@ -649,59 +697,84 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
       }
     }
 
-    // J. Brand Power
-    const trustedBrands = ['ugreen', 'baseus', 'anker', 'xiaomi', 'lenovo', 'sandisk', 'soundpeats'];
-    const foundBrand = trustedBrands.find((b) => titleLower.includes(b));
-    if (foundBrand) {
-      score += 3;
-      reasons.push(`Recognizable trusted brand found: ${foundBrand.toUpperCase()}`);
-    }
-
-    // K. Rating Validation
-    if (product.rating !== undefined) {
-      if (product.rating >= 4.6) {
-        score += 2;
-        reasons.push(`Strong rating signal: ${product.rating}`);
-      } else {
-        score -= 2;
-        warnings.push(`Weak rating signal: ${product.rating}`);
-      }
-    } else {
-      warnings.push('No rating signal available.');
-    }
-
-    // L. Sales Volume Validation
+    // I. Unified Sales Volume Scoring
     if (product.salesCount !== undefined) {
-      if (product.salesCount >= 50) {
+      if (product.salesCount >= 1000) {
+        score += 20;
+        reasons.push(`Massive sales volume: ${product.salesCount} orders`);
+      } else if (product.salesCount >= 100) {
+        score += 10;
+        reasons.push(`High sales volume: ${product.salesCount} orders`);
+      } else if (product.salesCount >= 50) {
         score += 2;
-        reasons.push(`Strong sales history: ${product.salesCount} orders`);
+        reasons.push(`Good sales volume: ${product.salesCount} orders`);
       } else if (product.salesCount > 0) {
-        reasons.push(`Some sales history: ${product.salesCount} orders`);
+        reasons.push(`Some sales volume: ${product.salesCount} orders`);
       } else {
         score -= 1;
         warnings.push('Zero recorded orders.');
       }
     } else {
+      score -= 20;
       warnings.push('No sales history available.');
     }
 
-    // M. Discount check
-    if (product.discountPercent !== undefined && product.discountPercent > 0) {
-      if (product.discountPercent >= 10 && product.discountPercent <= 80) {
-        score += 1;
-        reasons.push(`Meaningful discount: ${product.discountPercent}%`);
-      } else if (product.discountPercent > 80) {
-        score -= 1;
-        warnings.push(`Suspiciously large discount gap: ${product.discountPercent}%`);
+    // J. Unified Rating Scoring
+    let normRating = product.rating;
+    if (normRating !== undefined && normRating <= 5.0) {
+      normRating = normRating * 20;
+    }
+    if (normRating !== undefined) {
+      if (normRating >= 94) {
+        score += 10;
+        reasons.push(`Strong rating signal: ${normRating}%`);
+      } else if (normRating >= 92) {
+        score += 2;
+        reasons.push(`Good rating signal: ${normRating}%`);
+      } else {
+        score -= 2;
+        warnings.push(`Weak rating signal: ${normRating}%`);
       }
+    } else {
+      score -= 15;
+      warnings.push('No rating signal available.');
     }
 
-    // N. Suspicious original-price gaps
+    // K. Unified Discount & Commission (Secondary bonuses)
+    if (product.discountPercent !== undefined && product.discountPercent >= 50 && product.discountPercent <= 80) {
+      score += 5;
+      reasons.push(`Strong discount commercial bonus: ${product.discountPercent}%`);
+    } else if (product.discountPercent !== undefined && product.discountPercent >= 10 && product.discountPercent <= 80) {
+      score += 1;
+      reasons.push(`Meaningful discount: ${product.discountPercent}%`);
+    }
+
+    if (product.commissionRate !== undefined && product.commissionRate >= 8.0) {
+      score += 10;
+      reasons.push(`High commission commercial bonus: ${product.commissionRate}%`);
+    }
+
+    // L. Suspicious original-price gaps
     if (product.price && product.originalPrice && product.originalPrice.amount > 0) {
       const ratio = product.originalPrice.amount / product.price.amount;
       if (ratio > 8) {
         score -= 3;
         warnings.push(`Suspicious original-to-sale price gap (Ratio: ${ratio.toFixed(1)}x)`);
+      }
+    }
+
+    // M. Cheap & Cold Penalty
+    if (product.price && product.price.amount !== undefined) {
+      const currencyUpper = product.price.currency?.toUpperCase();
+      let isCheapAndCold = false;
+      if (currencyUpper === 'ILS') {
+        isCheapAndCold = product.price.amount < 8 && (product.salesCount ?? 0) < 100;
+      } else if (currencyUpper === 'USD') {
+        isCheapAndCold = product.price.amount < 2 && (product.salesCount ?? 0) < 100;
+      }
+      if (isCheapAndCold) {
+        score -= 50;
+        warnings.push(`Cheap and low-sales product penalty applied`);
       }
     }
 
@@ -744,6 +817,28 @@ export function selectBestProduct(products: CatalogProduct[]): SelectionResult {
       }
     } else {
       selectionIneligibilityReasons.push('Invalid or missing price');
+    }
+
+    // Known salesCount < 5 hard reject
+    if (product.salesCount !== undefined && product.salesCount < 5) {
+      selectionIneligibilityReasons.push(`Low sales volume: ${product.salesCount} orders`);
+    }
+
+    // Known rating < 84 hard reject (equivalent to 4.2 / 5.0 stars)
+    if (normRating !== undefined && normRating < 84) {
+      selectionIneligibilityReasons.push(`Low product rating: ${normRating}`);
+    }
+
+    // Narrowly targeted bad-product phrases hard reject
+    const blacklistedPhrases = [
+      'replacement blade', 'replacement filter', 'nozzle only', 'filter only', 
+      'cpu thermal grease', 'thermal grease', 'thermal paste', 'heatsink compound', 
+      'valve adapter', 'step up ring', 'lens adapter', 'empty medical bag', 
+      'empty first aid bag', 'scratch repair pen'
+    ];
+    const matchedPhrase = blacklistedPhrases.find(phrase => titleLower.includes(phrase));
+    if (matchedPhrase) {
+      selectionIneligibilityReasons.push(`Matches blacklisted phrase: "${matchedPhrase}"`);
     }
 
     const selectionEligible = selectionIneligibilityReasons.length === 0;

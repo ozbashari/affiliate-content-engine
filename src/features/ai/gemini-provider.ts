@@ -1,6 +1,7 @@
 import { AIProvider } from './provider';
 import { GeneratePostInput, GeneratePostResult, GeneratedPost } from './types';
 import { loadPromptTemplate } from './prompt-loader';
+import { buildTelegramHtmlPost } from '../publishing/formatter';
 
 /**
  * Strips formatting fences and parses raw response text into a JSON value.
@@ -221,7 +222,14 @@ export class GeminiProvider implements AIProvider {
     try {
       const validated = validateGeminiResponse(parsed);
       
-      const processedPost = postProcessTelegramPost(validated.telegramPost, product.price, product.originalPrice);
+      const processedPost = buildTelegramHtmlPost({
+        headline: validated.headline,
+        body: validated.body,
+        cta: validated.cta,
+        affiliateUrl: product.affiliateUrl,
+        price: product.price,
+        originalPrice: product.originalPrice,
+      });
 
       const post: GeneratedPost = {
         headline: validated.headline,

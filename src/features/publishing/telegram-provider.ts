@@ -1,4 +1,5 @@
 import { PublishInput, PublishResult } from './types';
+import { isTelegramHtmlParseError, stripTelegramHtml } from './formatter';
 
 interface TelegramErrorResponse {
   ok: boolean;
@@ -126,6 +127,43 @@ export class TelegramPublisher {
       ],
     };
 
+    // Helper functions for sending with HTML parsing fallback retry logic
+    const sendPhotoWithFallback = async (captionText: string, additionalPayload: Record<string, unknown>) => {
+      const res = await this.sendRequest<TelegramSuccessResponse>('sendPhoto', {
+        chat_id: this.channelId,
+        caption: captionText,
+        parse_mode: 'HTML',
+        ...additionalPayload
+      });
+      if (!res.success && res.error && isTelegramHtmlParseError(res.error)) {
+        console.warn(`Telegram HTML sendPhoto failed due to parse error: "${res.error}". Retrying once as plain text fallback.`);
+        return this.sendRequest<TelegramSuccessResponse>('sendPhoto', {
+          chat_id: this.channelId,
+          caption: stripTelegramHtml(captionText),
+          ...additionalPayload
+        });
+      }
+      return res;
+    };
+
+    const sendMessageWithFallback = async (textVal: string, additionalPayload: Record<string, unknown>) => {
+      const res = await this.sendRequest<TelegramSuccessResponse>('sendMessage', {
+        chat_id: this.channelId,
+        text: textVal,
+        parse_mode: 'HTML',
+        ...additionalPayload
+      });
+      if (!res.success && res.error && isTelegramHtmlParseError(res.error)) {
+        console.warn(`Telegram HTML sendMessage failed due to parse error: "${res.error}". Retrying once as plain text fallback.`);
+        return this.sendRequest<TelegramSuccessResponse>('sendMessage', {
+          chat_id: this.channelId,
+          text: stripTelegramHtml(textVal),
+          ...additionalPayload
+        });
+      }
+      return res;
+    };
+
     const isOverLimit = input.post.fullText.length > 1024;
 
     if (isOverLimit) {
@@ -140,9 +178,7 @@ export class TelegramPublisher {
         console.warn(`sendPhoto failed in oversized mode: ${photoResult.error || 'Unknown error'}. Falling back to text-only.`);
         
         // Fall back to sendMessage only (text-fallback)
-        const textResult = await this.sendRequest<TelegramSuccessResponse>('sendMessage', {
-          chat_id: this.channelId,
-          text: input.post.fullText,
+        const textResult = await sendMessageWithFallback(input.post.fullText, {
           reply_markup: inlineKeyboard,
         });
 
@@ -162,9 +198,7 @@ export class TelegramPublisher {
 
       // 2. Then send the full text as a separate sendMessage.
       // Attach the inline purchase button only to the text message.
-      const textResult = await this.sendRequest<TelegramSuccessResponse>('sendMessage', {
-        chat_id: this.channelId,
-        text: input.post.fullText,
+      const textResult = await sendMessageWithFallback(input.post.fullText, {
         reply_markup: inlineKeyboard,
       });
 
@@ -186,10 +220,8 @@ export class TelegramPublisher {
     } else {
       // Case A: Normal caption (fits in 1024 limit)
       // Attach the inline purchase button to the photo message.
-      const photoResult = await this.sendRequest<TelegramSuccessResponse>('sendPhoto', {
-        chat_id: this.channelId,
+      const photoResult = await sendPhotoWithFallback(input.post.fullText, {
         photo: input.imageUrl,
-        caption: input.post.fullText,
         reply_markup: inlineKeyboard,
       });
 
@@ -197,9 +229,7 @@ export class TelegramPublisher {
         console.warn(`sendPhoto failed in normal mode: ${photoResult.error || 'Unknown error'}. Falling back to text-only.`);
 
         // Fall back to sendMessage
-        const textResult = await this.sendRequest<TelegramSuccessResponse>('sendMessage', {
-          chat_id: this.channelId,
-          text: input.post.fullText,
+        const textResult = await sendMessageWithFallback(input.post.fullText, {
           reply_markup: inlineKeyboard,
         });
 
@@ -225,3 +255,4 @@ export class TelegramPublisher {
     }
   }
 }
+

@@ -71,6 +71,33 @@ export function filterProducts(uniqueProducts: UniqueDiscoveredProduct[]): Filte
       }
     }
 
+    // 7. Sales volume hard filter (known salesCount < 5)
+    if (p.salesCount !== undefined && p.salesCount < 5) {
+      reasons.push(`Low sales volume: ${p.salesCount} orders`);
+    }
+
+    // 8. Rating hard filter (known rating < 84 on 0-100 scale)
+    let normRating = p.rating;
+    if (normRating !== undefined && normRating <= 5.0) {
+      normRating = normRating * 20;
+    }
+    if (normRating !== undefined && normRating < 84) {
+      reasons.push(`Low product rating: ${normRating}`);
+    }
+
+    // 9. Blacklisted phrases hard filter
+    const blacklistedPhrases = [
+      'replacement blade', 'replacement filter', 'nozzle only', 'filter only', 
+      'cpu thermal grease', 'thermal grease', 'thermal paste', 'heatsink compound', 
+      'valve adapter', 'step up ring', 'lens adapter', 'empty medical bag', 
+      'empty first aid bag', 'scratch repair pen'
+    ];
+    const titleLower = p.title.toLowerCase();
+    const matchedPhrase = blacklistedPhrases.find(phrase => titleLower.includes(phrase));
+    if (matchedPhrase) {
+      reasons.push(`Matches blacklisted phrase: "${matchedPhrase}"`);
+    }
+
     if (reasons.length > 0) {
       rejected.push({
         product: item,
