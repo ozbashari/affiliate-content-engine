@@ -151,5 +151,32 @@ export const productTypeRules: Record<string, ProductTypeRule> = {
       'replacement container',
       'spare lid'
     ]
+  },
+  'bag sealer mini': {
+    intent: 'bag sealer mini',
+    positiveTypes: [
+      'bag sealer',
+      'heat sealer',
+      'seal machine',
+      'sealer clamp',
+      'package sealer',
+      'bag seal'
+    ],
+    conflictingTypes: [
+      'vacuum pump',
+      'compression pump',
+      'clothes pump',
+      'air pump',
+      'electric pump',
+      'bag pump'
+    ],
+    accessoryTypes: [
+      'compression bag',
+      'storage bag',
+      'vacuum bag'
+    ],
+    replacementTypes: [
+      'heating wire'
+    ]
   }
 };

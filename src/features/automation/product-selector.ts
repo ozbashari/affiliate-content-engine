@@ -319,9 +319,14 @@ export function computeConsumerReadiness(title: string) {
   } else {
     // Check if it's a normal consumer product matching a positive search intent term
     const consumerSignals = [
-      'chopper', 'peeler', 'organizer', 'holder', 'vacuum', 'inflator', 'light', 'plug', 'charger', 'bottle'
+      'chopper', 'peeler', 'organizer', 'holder', 'vacuum', 'inflator', 'light', 'plug', 'charger', 'bottle',
+      'sealer', 'diffuser', 'wristband', 'lock', 'pen', 'adapter', 'converter', 'ring', 'paste', 'kit', 'bag',
+      'towel', 'cloth', 'tape', 'mirror', 'pad'
     ];
-    const hasSignal = consumerSignals.some(s => titleLower.includes(s));
+    const hasSignal = consumerSignals.some(s => {
+      const regex = new RegExp('\\b' + s + 's?\\b', 'i');
+      return regex.test(titleLower);
+    });
     if (hasSignal) {
       level = 'high';
       reasons.push('Clear complete consumer product with understandable purpose');

@@ -273,6 +273,76 @@ function runTests() {
   assert('Case F: Missing sales/rating product remains eligible', scored21?.selectionEligible === true);
   assert('Case F: Missing sales/rating product receives penalties (score < 200)', (scored21?.score ?? 0) < 200);
 
+  // Task 2: Deterministic Blacklist Invariant Assertions
+  const blacklistPhrasesToTest = [
+    'scratch repair pen',
+    'valve adapter',
+    'step up ring',
+    'thermal paste',
+    'thermal grease',
+    'empty first aid bag',
+    'empty medical bag'
+  ];
+
+  blacklistPhrasesToTest.forEach((phrase) => {
+    const title = `Some brand ${phrase} for everyday use`;
+    const prod = createDummyProduct({ title });
+    const res = filterProducts([{ product: prod, origins: [] }]);
+    const selectRes = selectBestProduct([prod]);
+    
+    assert(
+      `Blacklist phrase "${phrase}" is hard-rejected by Quality Gate`,
+      res.eligible.length === 0 && selectRes.product === null
+    );
+  });
+
+  // Task 3: Car Phone Holder Accessory / Precedence Check
+  // A. complete car phone holder / dashboard mount -> VALID (Tier 1)
+  const carHolderA = createDummyProduct({
+    id: 'holder_a_valid',
+    title: 'Car Phone Holder Dashboard Windshield Air Vent Mount',
+    price: { amount: 35.00, currency: 'ILS' }, // sweet spot
+    salesCount: 50,
+    rating: 94,
+    origins: [{ strategyType: 'keyword', strategyValue: 'car phone holder', page: 1 }]
+  });
+  // B. magnetic ring -> ACCESSORY (Tier 3 or penalty)
+  const carHolderB = createDummyProduct({
+    id: 'holder_b_ring',
+    title: 'Magnetic Ring Holder Adapter Plate',
+    price: { amount: 35.00, currency: 'ILS' }, // sweet spot
+    salesCount: 10000, // massive sales
+    rating: 100, // perfect rating
+    commissionRate: 20.0, // huge commission
+    origins: [{ strategyType: 'keyword', strategyValue: 'car phone holder', page: 1 }]
+  });
+  // C. magnetic mount plate -> ACCESSORY (Tier 3 or penalty)
+  const carHolderC = createDummyProduct({
+    id: 'holder_c_plate',
+    title: 'Metal Magnetic Mount Plate Sticker for Car Phone Holder',
+    price: { amount: 35.00, currency: 'ILS' }, // sweet spot
+    salesCount: 10000,
+    rating: 100,
+    commissionRate: 20.0,
+    origins: [{ strategyType: 'keyword', strategyValue: 'car phone holder', page: 1 }]
+  });
+  // D. phone case with magnetic holder wording -> CONFLICTING (Tier 3 / low score)
+  const carHolderD = createDummyProduct({
+    id: 'holder_d_case',
+    title: 'Silicone Shockproof Phone Case Cover compatible with magnetic car mount',
+    price: { amount: 35.00, currency: 'ILS' },
+    salesCount: 10000,
+    rating: 100,
+    commissionRate: 20.0,
+    origins: [{ strategyType: 'keyword', strategyValue: 'car phone holder', page: 1 }]
+  });
+
+  const selectorRes = selectBestProduct([carHolderB, carHolderC, carHolderD, carHolderA]);
+  assert(
+    'Complete car phone holder outranks accessories and conflicting cases despite high sales/commission',
+    selectorRes.product?.id === 'holder_a_valid'
+  );
+
   console.log(`\n=== TESTS COMPLETE: ${passed} Passed, ${failed} Failed ===`);
   if (failed > 0) {
     process.exit(1);
@@ -288,21 +358,24 @@ function runReplay() {
   }
 
   const samples: Sample[] = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-  let totalKeywords = 0;
-  let beforeHits = 0;
-  let afterHits = 0;
-  let beforeEligibleTotal = 0;
-  let afterEligibleTotal = 0;
-  const rejectedReport: string[] = [];
-  const downrankedReport: string[] = [];
+  let totalQueries = 0;
+  let noWinnerCount = 0;
+  let strongWinners = 0;
+  let acceptableWinners = 0;
+  let weakWinners = 0;
+  let badWinners = 0;
 
-  console.log('\n=== RUNNING FIXED SAMPLE QUALITY GATE REPLAY ===');
+  console.log('\n==================================================');
+  console.log('PRODUCTION-LIKE REPLAY');
+  console.log('==================================================');
 
   for (const sample of samples) {
     if (sample.error) continue;
-    totalKeywords++;
+    totalQueries++;
 
-    // Reconstruct catalog products from the candidates list
+    const rawCount = sample.candidates.length;
+
+    // Reconstruct catalog products using the correct search intent metadata as origins
     const catalogCandidates = sample.candidates.map((c, i) => {
       return createDummyProduct({
         id: `c_${i}`,
@@ -311,65 +384,91 @@ function runReplay() {
         salesCount: c.sales,
         rating: normalizeRating(c.rating),
         discountPercent: 10,
-        commissionRate: 5.0
+        commissionRate: 5.0,
+        origins: [{ strategyType: 'keyword', strategyValue: sample.keyword, page: 1 }]
       });
     });
 
-    beforeEligibleTotal += catalogCandidates.length;
-
-    // Filter using filterProducts (the Quality Gate)
+    // Run through Product Quality Gate
     const uniqueDiscovered = catalogCandidates.map(c => ({ product: c, origins: [] }));
     const filtered = filterProducts(uniqueDiscovered);
     const eligibleAfter = filtered.eligible.map(e => e.product);
-    afterEligibleTotal += eligibleAfter.length;
+    const postFilterCount = eligibleAfter.length;
+    const rejectionCount = filtered.rejected.length;
 
-    // Log rejected products
-    filtered.rejected.forEach(r => {
-      rejectedReport.push(`[${sample.keyword}] Rejected: "${r.product.product.title.slice(0, 40)}..." (Reason: ${r.reason})`);
-    });
+    // Run Selector V2.0
+    const selection = selectBestProduct(eligibleAfter);
+    const winner = selection.product;
 
-    // Run selectors
-    const beforeSelection = selectBestProduct(catalogCandidates);
-    const afterSelection = selectBestProduct(eligibleAfter);
+    let winnerValidity = 'N/A';
+    let winnerTier = 'N/A';
+    let winnerReadiness = 'N/A';
+    let winnerScore = 0;
+    let qualityCat: 'STRONG' | 'ACCEPTABLE' | 'WEAK' | 'BAD' | 'NO WINNER' = 'NO WINNER';
 
-    const winnerBefore = beforeSelection.product;
-    const winnerAfter = afterSelection.product;
+    if (winner) {
+      const details = selection.rankedProducts?.find(rp => rp.product.id === winner.id);
+      winnerValidity = details?.productTypeValidity ?? 'unregulated';
+      winnerTier = details?.relevanceLevel ?? 'low';
+      winnerReadiness = details?.consumerReadinessLevel ?? 'medium';
+      winnerScore = details?.score ?? 0;
 
-    // Evaluate Quality
-    const evaluateProductQuality = (title: string): 'STRONG' | 'ACCEPTABLE' | 'WEAK' => {
-      const tl = title.toLowerCase();
+      // Quality evaluation
+      const tl = winner.title.toLowerCase();
       
       const badTerms = [
         'microfiber', 'cloth', 'glue', 'gel pen', 'clothespin', 'peg', 'scratch repair',
         'valve adapter', 'step up ring', 'thermal grease', 'thermal paste', 'backlight tester',
         'empty'
       ];
-      if (badTerms.some(t => tl.includes(t))) return 'WEAK';
-      
-      return 'STRONG';
-    };
 
-    const qualityBefore = winnerBefore ? evaluateProductQuality(winnerBefore.title) : 'WEAK';
-    const qualityAfter = winnerAfter ? evaluateProductQuality(winnerAfter.title) : 'WEAK';
+      // A. Check if the product type validity is conflicting or replacement (which means BAD/WEAK)
+      if (winnerValidity === 'conflicting' || winnerValidity === 'replacement') {
+        qualityCat = 'BAD';
+      } else if (winnerValidity === 'accessory') {
+        qualityCat = 'WEAK';
+      } else if (badTerms.some(t => tl.includes(t))) {
+        // Known weak categories (like gel pens, microfiber towels, glue, thermal pad CPU accessories)
+        qualityCat = 'WEAK';
+      } else if (
+        sample.keyword === 'emergency survival kit gear' && tl.includes('sleeping bag') ||
+        sample.keyword === 'super glue adhesive gel' && tl.includes('nail glue')
+      ) {
+        qualityCat = 'ACCEPTABLE';
+      } else {
+        qualityCat = 'STRONG';
+      }
 
-    if (qualityBefore === 'STRONG') beforeHits++;
-    if (qualityAfter === 'STRONG') afterHits++;
+      if (qualityCat === 'STRONG') strongWinners++;
+      else if (qualityCat === 'ACCEPTABLE') acceptableWinners++;
+      else if (qualityCat === 'WEAK') weakWinners++;
+      else if (qualityCat === 'BAD') badWinners++;
+    } else {
+      noWinnerCount++;
+    }
 
-    // Track downranked winners
-    if (winnerBefore && winnerAfter && winnerBefore.id !== winnerAfter.id) {
-      downrankedReport.push(`[${sample.keyword}] Winner changed: "${winnerBefore.title.slice(0, 45)}..." -> "${winnerAfter.title.slice(0, 45)}..."`);
+    console.log(`\nQuery: "${sample.keyword}"`);
+    console.log(`  - Raw candidates: ${rawCount}`);
+    console.log(`  - Post-Quality-Gate: ${postFilterCount} (Rejected: ${rejectionCount})`);
+    if (winner) {
+      console.log(`  - Winner: "${winner.title}"`);
+      console.log(`  - Score: ${winnerScore} | Validity: ${winnerValidity} | Relevance Tier: ${winnerTier} | Readiness: ${winnerReadiness}`);
+      console.log(`  - Quality: ${qualityCat}`);
+    } else {
+      console.log(`  - Winner: NO WINNER`);
     }
   }
 
-  const beforeHitRate = ((beforeHits / totalKeywords) * 100).toFixed(1);
-  const afterHitRate = ((afterHits / totalKeywords) * 100).toFixed(1);
-  const reduction = (((beforeEligibleTotal - afterEligibleTotal) / beforeEligibleTotal) * 100).toFixed(1);
-
-  console.log('\n--- BEFORE VS AFTER SUMMARY ---');
-  console.log(`- Eligible Candidates: Before: ${beforeEligibleTotal} | After: ${afterEligibleTotal} (Reduced by ${reduction}%)`);
-  console.log(`- Hit Rate (Strong Winners): Before: ${beforeHitRate}% (${beforeHits}/${totalKeywords}) | After: ${afterHitRate}% (${afterHits}/${totalKeywords})`);
-  
-  console.log(`\nReplay evaluation is complete.`);
+  console.log('\n==================================================');
+  console.log('FINAL PERFORMANCE STATS');
+  console.log('==================================================');
+  console.log(`- Total Queries Evaluated: ${totalQueries}`);
+  console.log(`- Queries with No Winner: ${noWinnerCount}`);
+  console.log(`- STRONG Winners: ${strongWinners}`);
+  console.log(`- ACCEPTABLE Winners: ${acceptableWinners}`);
+  console.log(`- WEAK Winners: ${weakWinners}`);
+  console.log(`- BAD Winners: ${badWinners}`);
+  console.log('==================================================\n');
 }
 
 runTests();

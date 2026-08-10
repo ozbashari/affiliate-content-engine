@@ -72,8 +72,8 @@ test('2. Current price is bold', () => {
   assert.ok(post.includes('<b>₪69</b>'), 'Current price must be wrapped in <b> tags');
 });
 
-// 3. Original price is strikethrough only when verified
-test('3. Original price is strikethrough only when verified', () => {
+// 3. Original price is strikethrough only when verified and formatted RTL-safe
+test('3. Original price is strikethrough only when verified and formatted RTL-safe', () => {
   // Case: verified and valid original price (> sale price)
   const post = buildTelegramHtmlPost({
     headline: 'Great Deal',
@@ -83,8 +83,28 @@ test('3. Original price is strikethrough only when verified', () => {
     price: { amount: 69, currency: 'ILS' },
     originalPrice: { amount: 119, currency: 'ILS' }
   });
+  assert.ok(post.includes('<b>₪69</b>'), 'Current price must be wrapped in <b> tags');
   assert.ok(post.includes('<s>₪119</s>'), 'Original price must be wrapped in <s> tags');
-  assert.ok(post.includes('🏷️ <s>₪119</s> → <b>₪69</b>'), 'Discount pricing line formatted incorrectly');
+  assert.ok(post.includes('במקום'), 'Hebrew "במקום" must appear in the discount price line');
+  assert.ok(!post.includes('→'), 'No arrow character should exist in the discount price line');
+  assert.ok(post.indexOf('<b>₪69</b>') < post.indexOf('<s>₪119</s>'), 'Current price must appear before original price');
+
+  // Verify plain-text fallback renders correctly without HTML artifacts
+  const plainText = stripTelegramHtml(post);
+  assert.ok(plainText.includes('₪69 במקום ₪119'), 'Plain-text fallback should contain the correct discount statement');
+  assert.ok(!plainText.includes('<'), 'Plain-text fallback must not contain HTML tags');
+
+  // Case: different currencies (should omit original price)
+  const postDiffCur = buildTelegramHtmlPost({
+    headline: 'Great Deal',
+    body: 'Product description',
+    cta: 'Buy Now',
+    affiliateUrl: 'https://s.click.aliexpress.com/e/123',
+    price: { amount: 69, currency: 'ILS' },
+    originalPrice: { amount: 119, currency: 'USD' }
+  });
+  assert.ok(!postDiffCur.includes('<s>'), 'Should omit original price when currencies do not match');
+  assert.ok(postDiffCur.includes('💰 <b>₪69</b>'), 'Fallback normal price layout missing on currency mismatch');
 
   // Case: original price <= sale price (invalid discount, should not show original price)
   const postInvalid = buildTelegramHtmlPost({
@@ -109,7 +129,6 @@ test('4. No original price -> no <s> tag', () => {
     price: { amount: 69, currency: 'ILS' }
   });
   assert.ok(!post.includes('<s>'), 'Post should not contain <s> tag');
-  assert.ok(!post.includes('🏷️'), 'Post should not contain 🏷️ emoji without discount');
   assert.ok(post.includes('💰 <b>₪69</b>'), 'Post should contain 💰 emoji and bold price');
 });
 

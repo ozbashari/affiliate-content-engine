@@ -35,6 +35,7 @@ export function buildTelegramHtmlPost(input: {
   affiliateUrl: string;
   price: Money;
   originalPrice?: Money;
+  discountPercent?: number;
 }): string {
   const escapedHeadline = escapeHtml(input.headline.trim());
   const escapedBody = escapeHtml(input.body.trim());
@@ -56,7 +57,10 @@ export function buildTelegramHtmlPost(input: {
       input.originalPrice.currency
     );
     const escapedOriginal = escapeHtml(formattedOriginal);
-    priceLine = `🏷️ <s>${escapedOriginal}</s> → <b>${escapedPrice}</b>`;
+    priceLine = `💰 <b>${escapedPrice}</b> במקום <s>${escapedOriginal}</s>`;
+    if (input.discountPercent !== undefined && input.discountPercent > 0) {
+      priceLine += ` · ${input.discountPercent}% הנחה`;
+    }
   }
 
   // Assemble the parts. Ensure standard blank line spacing and keep the affiliate URL raw on the final line.
