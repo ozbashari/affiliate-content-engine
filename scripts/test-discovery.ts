@@ -1233,16 +1233,25 @@ async function runTests() {
     const activeStrategies = getScheduledStrategies(discoveryConfig.strategies);
     assert.strictEqual(activeStrategies.length, 3, 'Active scheduler must select exactly 3 strategies');
 
-    // 3. V2 configuration shape and category count validation
-    assert.ok(discoveryLibraryV2, 'V2 library config must be exported');
-    assert.strictEqual(discoveryLibraryV2.categories.length, 30, 'V2 library must contain exactly 30 categories');
-    assert.strictEqual(discoveryLibraryV2.categoriesPerRun, 3, 'V2 categoriesPerRun must be 3');
-    assert.strictEqual(discoveryLibraryV2.defaultKeywordsPerCategory, 1, 'V2 defaultKeywordsPerCategory must be 1');
+    // 3. V2.1 configuration shape and category count validation
+    assert.ok(discoveryLibraryV2, 'V2.1 library config must be exported');
+    assert.strictEqual(discoveryLibraryV2.categories.length, 30, 'V2.1 library must contain exactly 30 categories');
+    assert.strictEqual(discoveryLibraryV2.categoriesPerRun, 3, 'V2.1 categoriesPerRun must be 3');
+    assert.strictEqual(discoveryLibraryV2.defaultKeywordsPerCategory, 1, 'V2.1 defaultKeywordsPerCategory must be 1');
 
     // 4 & 5. Category ID uniqueness and duplication checks
     const seenCategoryIds = new Set<string>();
     const seenKeywords = new Set<string>();
     const duplicateKeywords: string[] = [];
+
+    const expectedCounts: Record<string, number> = {
+      kitchen: 25, car: 25, home: 22, cleaning: 20, organization: 22, diy: 15,
+      travel: 20, camping: 18, pets: 18, phone: 12, computer: 12, office: 12,
+      lighting: 25, garden: 14, bathroom: 20, laundry: 14, coffee: 12, baby: 14,
+      kids: 14, fitness: 12, bicycle: 12, bbq: 12, storage: 20, electronics: 18,
+      smarthome: 25, emergency: 15, security: 15, photography: 10, tools: 20,
+      car_care: 14
+    };
 
     for (const cat of discoveryLibraryV2.categories) {
       // Check for duplicate category IDs
@@ -1257,20 +1266,22 @@ async function runTests() {
       assert.ok(cat.description.trim(), `Category ${cat.id} must have a valid description`);
       assert.ok(cat.weight > 0, `Category ${cat.id} weight must be a positive integer`);
       assert.strictEqual(cat.enabled, true, `Category ${cat.id} must be enabled`);
-      assert.strictEqual(cat.keywords.length, 20, `Category ${cat.id} must contain exactly 20 keywords`);
+
+      const expected = expectedCounts[cat.id];
+      assert.strictEqual(cat.keywords.length, expected, `Category ${cat.id} must contain exactly ${expected} keywords`);
 
       for (const kw of cat.keywords) {
         assert.ok(kw.trim(), `Empty keyword found in category ${cat.id}`);
         const normKw = kw.toLowerCase().trim();
         if (seenKeywords.has(normKw)) {
-          duplicateKeywords.push(kw);
+          duplicateKeywords.push(`${cat.id}: ${kw}`);
         }
         seenKeywords.add(normKw);
       }
     }
 
     assert.strictEqual(duplicateKeywords.length, 0, `Duplicate keywords found: ${duplicateKeywords.join(', ')}`);
-    assert.strictEqual(seenKeywords.size, 600, 'Total unique keywords in the library must be exactly 600');
+    assert.strictEqual(seenKeywords.size, 507, 'Total unique keywords in the library must be exactly 507');
 
     // 7. Future resolver logic test (selecting 3 categories and 1 keyword per category yields exactly 3 strategies)
     const selectedCategories = discoveryLibraryV2.categories.slice(0, 3);

@@ -1,124 +1,83 @@
-# Walkthrough — Selector V2.0 Implementation
+# Walkthrough — Discovery V2.1 Library Update
 
-We have successfully implemented and verified the **Selector V2.0 (Intent Alignment Correction)** release. All deterministic tests, E2E discovery tests, linter, formatting checks, and Next.js builds compile and run successfully.
-
----
-
-## 1. Files Changed
-* **[product-selector.ts](file:///c:/Users/Oz/Desktop/affiliate_content_engine/src/features/automation/product-selector.ts)**:
-  - Updated `computeKeywordRelevance` to extract core-intent words (removing modifiers) and check the `60-character` proximity threshold for early matching.
-  - Replaced flat relevance/readiness scoring with hierarchical precedence tiers (**Tier 1 = 200**, **Tier 2 = 100**, **Tier 2.5 = 50**, **Tier 3 = 0**).
-  - Unified scoring modifiers to prevent overlap (single pricing score, single sales score, single rating score).
-  - Integrated secondary commercial bonuses and commodity demotion rules.
-  - Fixed readiness tier collapse by adding missing product nouns to `consumerSignals` and applying word boundary matching (`\b`) to prevent substring collisions.
-* **[product-type-rules.ts](file:///c:/Users/Oz/Desktop/affiliate_content_engine/src/features/automation/product-type-rules.ts)**:
-  - Added product type rule mapping for `bag sealer mini` to flag electric/vacuum pumps as conflicting.
-* **[test-quality-gate.ts](file:///c:/Users/Oz/Desktop/affiliate_content_engine/scripts/test-quality-gate.ts)**:
-  - Added 18 custom unit tests validating Selector V2.0 features (Cases A to F), deterministic blacklist hard rejections, and car phone holder accessory checks.
-  - Switched replay harness path to read stable `aliexpress_samples.json` and reconstruct candidates with correct search intent origins metadata.
+We have successfully executed the **Discovery V2.1 Library Update** migration, verified it with all V2.1 automated invariants, and published two live deals to the Telegram channel.
 
 ---
 
-## 2. Exact Final Selector V2.0 Scoring Formula
+## 1. V2.1 Category Migration Summary
 
-A candidate product that passes the Quality Gate is scored as follows:
+Category weights (`weight` in `discoveryLibraryV2`) are preserved exactly to keep scheduler behavior stable. The number of keywords inside each category is adjusted dynamically based on product opportunities:
 
-$$\text{Score} = \text{BaseScore} + \text{PriceModifier} + \text{SalesModifier} + \text{RatingModifier} + \text{AffiliateBonus} + \text{DiscountBonus} + \text{BrandBonus} + \text{Penalties}$$
+| Category ID | Old Count | New Count | Removed | Replaced | Added | Weight |
+|---|---|---|---|---|---|---|
+| `kitchen` | 20 | 25 | 0 | 5 | 5 | 10 |
+| `car` | 20 | 25 | 2 | 10 | 7 | 10 |
+| `home` | 20 | 22 | 0 | 0 | 2 | 9 |
+| `cleaning` | 20 | 20 | 0 | 1 | 1 | 8 |
+| `organization` | 20 | 22 | 0 | 0 | 2 | 8 |
+| `diy` | 20 | 15 | 5 | 1 | 0 | 7 |
+| `travel` | 20 | 20 | 0 | 0 | 0 | 8 |
+| `camping` | 20 | 18 | 2 | 0 | 0 | 8 |
+| `pets` | 20 | 18 | 2 | 0 | 0 | 6 |
+| `phone` | 20 | 12 | 8 | 0 | 0 | 7 |
+| `computer` | 20 | 12 | 8 | 0 | 0 | 6 |
+| `office` | 20 | 12 | 8 | 1 | 0 | 6 |
+| `lighting` | 20 | 25 | 0 | 0 | 5 | 9 |
+| `garden` | 20 | 14 | 6 | 0 | 0 | 8 |
+| `bathroom` | 20 | 20 | 0 | 0 | 0 | 7 |
+| `laundry` | 20 | 14 | 6 | 0 | 0 | 7 |
+| `coffee` | 20 | 12 | 8 | 0 | 0 | 6 |
+| `baby` | 20 | 14 | 6 | 0 | 0 | 5 |
+| `kids` | 20 | 14 | 6 | 0 | 0 | 5 |
+| `fitness` | 20 | 12 | 8 | 0 | 0 | 5 |
+| `bicycle` | 20 | 12 | 8 | 0 | 0 | 5 |
+| `bbq` | 20 | 12 | 8 | 0 | 0 | 6 |
+| `storage` | 20 | 20 | 0 | 1 | 1 | 8 |
+| `electronics` | 20 | 18 | 2 | 0 | 0 | 7 |
+| `smarthome` | 20 | 25 | 0 | 0 | 5 | 7 |
+| `emergency` | 20 | 15 | 5 | 0 | 0 | 6 |
+| `security` | 20 | 15 | 5 | 0 | 0 | 6 |
+| `photography` | 20 | 10 | 10 | 0 | 0 | 4 |
+| `tools` | 20 | 20 | 0 | 0 | 0 | 7 |
+| `car_care` | 20 | 14 | 6 | 0 | 0 | 8 |
 
-### A. Precedence Base Score
-- **Tier 1 (High Relevance + High Readiness)**: Base = `200` points (first core word matches in the first 60 chars).
-- **Tier 2 (Medium Relevance + High Readiness)**: Base = `100` points (core words matched, but late/stuffed).
-- **Tier 2.5 (Medium Readiness)**: Base = `50` points.
-- **Tier 3 (Low Relevance / Low Readiness)**: Base = `0` points.
-
-### B. Price Modifier
-- In sweet spot range (15 to 60 ILS or 4 to 15 USD): `+15` points.
-- In preferred range (8 to 15 ILS / 60 to 110 ILS): `+5` points (lower preferred) or `+10` points (upper preferred).
-- In high range (above midMax): `-5` points.
-- Under preferred minimum: `-15` points.
-
-### C. Sales Modifier
-- Sales count >= 1000: `+20` points.
-- Sales count >= 100: `+10` points.
-- Sales count >= 50: `+2` points.
-- Zero sales: `-1` point.
-- Missing sales count: `-20` points.
-
-### D. Rating Modifier
-- Normalized rating >= 94%: `+10` points.
-- Normalized rating >= 92%: `+2` points.
-- Normalized rating < 92%: `-2` points.
-- Missing rating: `-15` points.
-
-### E. Commercial Bonuses
-- High commission (commissionRate >= 8%): `+10` points.
-- High discount (discountPercent >= 50%): `+5` points.
-- Meaningful discount (discountPercent >= 10%): `+1` point.
-
-### F. Penalties & Demotions
-- Commodity Penalty: `-40` points (cloth, peg, glue, pen, microfiber, sponge).
-- Accessory Penalty: `-50` points.
-- Completeness Warning Penalty: `-100` points.
-- Decorative Penalty: `-80` points.
-- Cheap & Cold Penalty: `-50` points if price < 8 ILS and sales < 100.
-
----
-
-## 3. Replay Performance Summary (Production-like Replay)
-We replayed the selection engine against the 19 resolved query sets in `aliexpress_samples.json`:
-
-* **Total Queries Evaluated**: 19
-* **Queries with No Winner**: 0
-* **STRONG Winners**: 15 (78.9%)
-* **WEAK Winners**: 4 (21.1%) (due to commodity terms like microfiber, gel pen refills, glue, and scratch paint repair)
-* **BAD Winners**: 0 (0.0%)
+### V2.1 Library Totals
+* **Old Total**: `600` keywords
+* **New Total**: `507` keywords
+* **Removed**: `121` keywords
+* **Replaced**: `19` keywords
+* **Added**: `28` keywords
 
 ---
 
-## 4. Replay Winner per Query (Selector V2.0)
+## 2. Invariant & Test Verification
 
-| Query / Keyword | Winner Selected | Price | Sales | Rating | Match Quality | Tier | Score |
-|---|---|---|---|---|---|---|---|
-| **`bag sealer mini`** | Mini Hea Bag Seal Machine Package Sealer | 23.79 ILS | 47 | 84% | **STRONG** | Tier 1 | 214 |
-| **`seat gap filler organizer`** | 2XPCS New Car Seat Gap Filler Between Organizer | 9.95 ILS | 5 | 100% | **STRONG** | Tier 1 | 216 |
-| **`magnetic wristband for screws`** | Magnetic Wristband for Holding Screws... | 34.06 ILS | 12237 | 91.9% | **STRONG** | Tier 1 | 134 |
-| **`security door lock portable`** | Portable Security Door Lock Travel Safety Lock... | 27.08 ILS | 163 | 88% | **STRONG** | Tier 1 | 224 |
-| **`dog water bottle portable`** | Portable Dog Cat Water Bottle with Storage Food... | 60.77 ILS | 1182 | 95.8% | **STRONG** | Tier 1 | 241 |
-| **`motion sensor light strip closet`** | 1–5M PIR Motion Sensor LED Strip Light | 36.62 ILS | 118 | 98% | **STRONG** | Tier 1 | 236 |
-| **`under sink organizer sliding`** | Under Sink Organizer, Pull Out Cabinet Organizer | 234.25 ILS | 495 | 86.6% | **STRONG** | Tier 1 | 204 |
-| **`cable clip organizer silicone`** | Cable Clips Phone Cord Holder USB Data Line | 22.65 ILS | 4423 | 92.8% | **STRONG** | Tier 1 | 238 |
-| **`micro fiber cleaning cloths`** | 25x25cm Microfiber Dish Towels, 20-Pack | 39.82 ILS | 1299 | 98% | **WEAK** (Commodity) | Tier 1 | 206 |
-| **`super glue adhesive gel`** | 15mL Gel Nail Glue for Rhinestones... | 23.93 ILS | 1823 | 94.1% | **WEAK** (Glue) | Tier 1 | 56 |
-| **`gel pens set black blue`** | Erasable Retractable Gel Pen Set 0.5mm | 43.66 ILS | 9 | 100% | **WEAK** (Gel Pen) | Tier 1 | 186 |
-| **`scratch repair pen car`** | Car Scratch Repair Paint Pen - Instant Touch-Up | 35.03 ILS | 880 | 98% | **WEAK** (Scratch) | Tier 1 | 236 |
-| **`valve adapter converter presta schrader`** | Bicycle Pump Nozzle Hose Adapter... | 20.77 ILS | 5 | 100% | **STRONG** | Tier 2 | 126 |
-| **`step up ring filter step adapter`** | Camera Lens Filter Adapter Ring... | 17.61 ILS | 777 | 98.3% | **STRONG** | Tier 1 | 236 |
-| **`thermal paste syringe CPU`** | 100pcs 100*100mm Heatsink Thermal Pad | 1.05 ILS | 110 | 97.8% | **STRONG** | Tier 2 | 106 |
-| **`emergency survival kit bag gear`** | Portable Waterproof Emergency Survival Sleeping Bag | 43.76 ILS | 2720 | 93.2% | **STRONG** | Tier 1 | 238 |
-| **`car phone holder`** | Strip Metal Magnetic Phone Holder Stand | 12.85 ILS | 22 | 100% | **STRONG** | Tier 1 | 216 |
-| **`essential oil diffuser ultrasonic`** | 100ml Ceramic Essential Oil Diffuser | 28.76 ILS | 43 | 96.7% | **STRONG** | Tier 1 | 226 |
-| **`first aid kit bag empty`** | Tactical First Aid Bag Medical Kit Bag Molle | 53.10 ILS | 578 | 95.8% | **STRONG** | Tier 1 | 236 |
+All automated checks pass successfully. The `scripts/test-discovery.ts` test file was updated to assert:
+- Exactly **30 categories** exist.
+- Exactly **507 unique keywords** exist globally.
+- Categorized keyword counts match their V2.1 target sizes exactly.
+- Duplication checks pass (zero normalized duplicate keywords globally).
+- Legacy V1 isolation remains 100% intact (exactly 6 legacy strategies).
+
+```bash
+# Test command output:
+Test 17: V2 Discovery Library structure, metadata, and V1 compatibility checks
+All tests completed successfully!
+```
 
 ---
 
-## 5. Winners Changed from V1 to V2.0
-1. **`dog water bottle portable`**:
-   - *V1 Winner*: `Portable Dog Cat Water Bottle with Storage Food...` (Price: 60.77, Sales: 1182).
-   - *V2.0 Winner*: `Portable Dog Cat Water Bottle with Storage Food...` (Price: 60.77, Sales: 1182).
-   - *Result*: The keyword-stuffed pet shower head was demoted to Tier 2 (Score: 136) and did not win.
-2. **`bag sealer mini`**:
-   - *V1 Winner*: `Folding Compressed Bag Electric Pump...` — **WEAK** (vacuum pump for clothes).
-   - *V2.0 Winner*: `Mini Hea Bag Seal Machine Package Sealer...` — **STRONG** (mini heat bag sealer). The pump was correctly flagged as a conflicting type by the new `bag sealer mini` product type rule.
-3. **`car phone holder`**:
-   - *V1 Winner*: `For Magsafe Strong Magnetic Ring Holder` — **WEAK** (magnetic ring accessory).
-   - *V2.0 Winner*: `Strip Metal Magnetic Phone Holder Stand` — **STRONG** (complete mount/holder). The magnetic ring accessory was penalized and outranked.
-4. **`first aid kit bag empty`**:
-   - *V1 Winner*: `Tactical Kaolin Hemostatic Compressed Gauze...` — **WEAK** (medical dressing consumable).
-   - *V2.0 Winner*: `Tactical First Aid Bag Medical Kit Bag Molle...` — **STRONG** (empty first aid bag).
+## 3. Live Telegram Publish Runs
+Using the updated V2.1 rotation:
 
----
+1. **Deal 1 — Car Care (`car_care` category)**:
+   - *Product External ID*: `1005005913678483`
+   - *Product Title*: `"3 Inch Car Headlight Restoration Kit with Drill Buffing Sponge Polishing Pads Headlight Lens Cleaner and Restorer,37PCS"`
+   - *Telegram Message ID*: `1782`
+   - *Publish Type*: `photo` (with clean bold headline, RTL price block, and CTA)
 
-## 6. Verification and Behavioral Invariants
-- **Blacklist Invariants**: Fully hold. Exact blacklisted phrases (such as `scratch repair pen`, `valve adapter`, `step up ring`, `thermal paste`, `thermal grease`, `empty first aid bag`, `empty medical bag`) are hard-rejected by `filterProducts` and receive `selectionEligible === false` with appropriate reasons.
-- **Accessory Precedence**: Complete holders outrank accessories (like magnetic rings/plates) and conflicting cases (like phone cases) despite lower sales or lack of commercial bonuses.
-- **Discovery & Publishing**: 100% untouched. All formatting and scheduler tests pass successfully.
+2. **Deal 2 — Cleaning Tools (`cleaning` category)**:
+   - *Product External ID*: `1005004325707271`
+   - *Product Title*: `"Window Mesh Screen Brush Curtain Net Wipe Cleaner Carpet Brush Dust Removal Brush Home Retractable Long Handle Cleaning Tools"`
+   - *Telegram Message ID*: `1783`
+   - *Publish Type*: `photo`
