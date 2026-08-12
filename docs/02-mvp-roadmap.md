@@ -159,6 +159,8 @@
 
 ניתן לבחור אם לפרסם את הגרסה המקורית או את גרסת ה-AI.
 
+**עדכון (12/8)**: בזרימת ה-Cron האוטומטית אין שלב Preview ידני — הפרסום עם תוכן ה-AI קורה אוטומטית בלי אישור אדם. הבחירה/Preview הידני עדיין קיימת בזרימה הידנית דרך ה-UI.
+
 ---
 
 # MVP Complete
@@ -180,12 +182,14 @@
 
 רק לאחר השלמת ה-MVP ניתן להתחיל לעבוד על:
 
-* Automation
-* Scheduler
-* Cron
-* Dashboard
-* Analytics
-* Redirect Tracking
-* Multi Channel
-* Additional Affiliate Networks
+* Automation — ✅ בוצע (ריצה אוטומטית מקצה לקצה, ללא לחיצת כפתור ידנית)
+* Scheduler — ✅ בוצע (Discovery V2 Diversity Scheduler, עם fallback ל-V1)
+* Cron — ✅ בוצע (Render, כל כ-15 דק', עם נעילה מבוזרת ב-Supabase)
+* Dashboard — ❌ עדיין לא
+* Analytics — ❌ עדיין לא (אין מעקב קליקים/המרות/רווח — publish-and-forget)
+* Redirect Tracking — ❌ עדיין לא
+* Multi Channel — ❌ עדיין לא (טלגרם בלבד)
+* Additional Affiliate Networks — ❌ עדיין לא (AliExpress בלבד)
+
+**עדכון (12/8)**: שלושת הפריטים הראשונים הושלמו ורצים בפרודקשן. חמשת הפריטים הנותרים הם עדיין הצעד הבא בפועל.
 

@@ -2,6 +2,8 @@
 
 # Affiliate Content Engine — Project Overview
 
+> **עדכון סטטוס (12/8):** המסמך הזה משקף את החזון המקורי של ה-MVP. בפועל הפרויקט התקדם מעבר לכך — Cron/Automation, AI Content (Gemini) וסקדולר Diversity V2 כבר רצים בפרודקשן על Render (ראה סעיף "מה לא בונים ב-MVP" למטה, שכבר לא מדויק לגבי Cron/Automation). Multi-channel, Redirect Tracking, Dashboard מתקדם ו-Analytics עדיין **לא** קיימים — זה נכון עדיין. סטטוס עדכני מפורט יותר ב-`docs/project/project-state.md`.
+
 ## מטרת הפרויקט
 
 Affiliate Content Engine היא מערכת פנימית שמטרתה לאתר מוצרים מאתרי Affiliate, להתחיל עם AliExpress, לשמור אותם במסד נתונים, ולאפשר פרסום מהיר שלהם לערוץ טלגרם.

@@ -50,11 +50,9 @@ Supabase (PostgreSQL)
 
 # ORM
 
-Prisma
+**עדכון (12/8): בפועל אין Prisma בפרויקט.** אין תלות ב-Prisma ב-`package.json` ואין `schema.prisma`. הגישה למסד הנתונים מתבצעת ישירות באמצעות `@supabase/supabase-js`, וה-schema (טבלאות, אינדקסים, RPC) מנוהל כ-migrations ידניים תחת `docs/project/migrations/`.
 
-כל הגישה למסד הנתונים תתבצע באמצעות Prisma.
-
-אין להשתמש ב-SQL ישיר אלא אם יש צורך מיוחד.
+ההחלטה המקורית (לצורך היסטוריה) הייתה Prisma — זה לא מה שיושם בפועל, ואין תוכנית נוכחית לעבור אליו.
 
 ---
 
@@ -86,7 +84,7 @@ Telegram Bot API
 
 # Hosting
 
-Vercel
+**עדכון (12/8)**: ריצת ה-Automation/Cron בפרודקשן היא על **Render** (Scheduled Job שמריץ `npm run cron` → `scripts/run-cron-once.ts`), לא Vercel. קובץ `vercel.json` עם cron יומי היה ניסיון ראשוני על Vercel שהוחלף ע"י Render בפועל — הוסר מהריפו כדי לא להטעות. אירוח קבוע ל-Web UI (Products Page) לא הוגדר עדיין.
 
 ---
 
@@ -125,6 +123,8 @@ Console Logs בלבד.
 בשלב הראשון יתבצעו בדיקות ידניות.
 
 בדיקות אוטומטיות יתווספו בשלבים מתקדמים יותר.
+
+**עדכון (12/8)**: קיימות כיום סקריפטי בדיקה אוטומטיים תחת `scripts/test-*.ts` (discovery, quality-gate, formatting, e2e, publish-real).
 
 ---
 

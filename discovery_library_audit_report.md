@@ -172,7 +172,7 @@ We analyzed replacing the raw affiliate URL link with `<a href="AFF_LINK">לרכ
    - If we introduce `<a>` tags, `stripTelegramHtml` **must be updated** to parse the `href` attribute and append the raw URL, otherwise the plain-text message will lose the affiliate link entirely!
 5. **Reliability Risk**:
    - **MEDIUM-HIGH**. If the HTML link is malformed or rejected by Telegram, the fallback plain-text *must* extract and append the link. Any bug in the regex parser will result in unsent links or immediate channel posting bans.
-   - **Verdict**: Do NOT implement this change yet. We will remain on raw links for maximum delivery safety.
+   - **Verdict (final, updated 12/8)**: Do NOT implement this change. This is not a "not yet" — the owner has explicitly decided to keep the raw affiliate link visible in the post body **in addition to** the inline purchase button, as a permanent design choice, not only for delivery-safety reasons. No further work is planned on hiding/wrapping the raw link.
 
 ---
 

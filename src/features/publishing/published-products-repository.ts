@@ -25,6 +25,18 @@ export async function isProductPublished(source: string, externalId: string): Pr
   return !!data;
 }
 
+const SAVE_PUBLISHED_PRODUCT_MAX_ATTEMPTS = 4;
+const SAVE_PUBLISHED_PRODUCT_RETRY_DELAY_MS = 500;
+
+/**
+ * Saves the publication record after a product has already gone out to
+ * Telegram. A dropped insert here (transient network/Supabase error) would
+ * leave the product unrecorded, so the next cron tick's isProductPublished
+ * check would return false and could re-select and re-publish the same
+ * product. Retrying with backoff closes that window for transient failures;
+ * a genuine unique-constraint violation is not retried since it means the
+ * record already exists.
+ */
 export async function savePublishedProduct(input: {
   source: string;
   externalId: string;
@@ -32,26 +44,46 @@ export async function savePublishedProduct(input: {
 }): Promise<void> {
   const supabase = getSupabaseServerClient();
 
-  const { error } = await supabase
-    .from('published_products')
-    .insert([
-      {
-        source: input.source,
-        external_id: input.externalId,
-        telegram_message_id: input.telegramMessageId,
-        published_at: new Date().toISOString(),
-      },
-    ]);
+  let lastErrorMessage = 'Unknown error';
 
-  if (error) {
-    // PostgreSQL error code for unique constraint violation is '23505'
+  for (let attempt = 1; attempt <= SAVE_PUBLISHED_PRODUCT_MAX_ATTEMPTS; attempt++) {
+    const { error } = await supabase
+      .from('published_products')
+      .insert([
+        {
+          source: input.source,
+          external_id: input.externalId,
+          telegram_message_id: input.telegramMessageId,
+          published_at: new Date().toISOString(),
+        },
+      ]);
+
+    if (!error) {
+      return;
+    }
+
+    // PostgreSQL error code for unique constraint violation is '23505'.
+    // This means the record already exists - retrying would not help.
     if (error.code === '23505') {
       throw new UniqueConstraintViolationError(
         `Unique constraint violation: Product (source: ${input.source}, externalId: ${input.externalId}) has already been recorded.`
       );
     }
-    throw new Error(`Failed to save published product: ${error.message}`);
+
+    lastErrorMessage = error.message;
+
+    if (attempt < SAVE_PUBLISHED_PRODUCT_MAX_ATTEMPTS) {
+      const delayMs = SAVE_PUBLISHED_PRODUCT_RETRY_DELAY_MS * attempt;
+      console.warn(
+        `savePublishedProduct attempt ${attempt}/${SAVE_PUBLISHED_PRODUCT_MAX_ATTEMPTS} failed for product (source: ${input.source}, externalId: ${input.externalId}, telegramMessageId: ${input.telegramMessageId}): ${error.message}. Retrying in ${delayMs}ms.`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
+
+  throw new Error(
+    `Failed to save published product after ${SAVE_PUBLISHED_PRODUCT_MAX_ATTEMPTS} attempts: ${lastErrorMessage}`
+  );
 }
 
 export async function getPublishedExternalIds(
